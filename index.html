@@ -165,6 +165,7 @@
   .section-header .count { font-size: 11px; color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
   .section-header-right { display: flex; align-items: center; gap: 10px; }
   .count-all-btn { padding: 3px 9px; font-size: 11px; }
+  .hint-text { font-size: 11.5px; color: var(--text-dim); margin: 0 0 10px; line-height: 1.5; }
   .section-header .chevron {
     display: inline-block;
     color: var(--text-dim);
@@ -355,6 +356,46 @@
   </div>
 </div>
 
+<div class="card section-card hidden" id="compareSection">
+  <div class="section-header" id="compareHeader">
+    <h2><span class="step-badge">7</span>Compare Changesets</h2>
+    <div class="section-header-right">
+      <span class="count" id="compareCount"></span>
+      <span class="chevron">▾</span>
+    </div>
+  </div>
+  <div class="section-body">
+    <p class="hint-text">Uses the separate Changed Elements API to compute exactly which elements changed between two changesets — element ids, insert/update/delete, and which categories of change. This is a different API from the tables above; enabling and running a comparison can take anywhere from a few seconds to a long time on large iModels.</p>
+    <div class="row">
+      <div class="field">
+        <label for="compareStartSelect">Start changeset</label>
+        <select id="compareStartSelect"><option value="">-- select --</option></select>
+      </div>
+      <div class="field">
+        <label for="compareEndSelect">End changeset</label>
+        <select id="compareEndSelect"><option value="">-- select --</option></select>
+      </div>
+      <button id="runComparisonBtn">Compare</button>
+      <button id="cancelComparisonBtn" class="secondary hidden">Cancel</button>
+    </div>
+    <p class="hint-text">Tip: pick the same changeset for both Start and End to see just that one changeset's changes.</p>
+    <div id="compareJobStatus" class="status"></div>
+
+    <div class="section-controls">
+      <input type="search" id="compareFilter" placeholder="Filter by element id, class id, change type...">
+      <div id="compareStatus" class="status" style="margin:0"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="compareTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button id="loadMoreCompareBtn" class="secondary hidden">Load more</button>
+    <div class="details-panel" id="compareDetails"><p class="details-empty">Run a comparison, then select a row above to see its details.</p></div>
+  </div>
+</div>
+
 <script>
 (function () {
   "use strict";
@@ -521,11 +562,38 @@
     { bit: 32, label: "Global Properties" }
   ];
 
+  function describeFlags(value, flags, zeroLabel) {
+    if (value === undefined || value === null) return "—";
+    if (value === 0) return zeroLabel;
+    const labels = flags.filter((f) => (value & f.bit) === f.bit).map((f) => f.label);
+    return (labels.length ? labels.join(", ") : zeroLabel) + " (" + value + ")";
+  }
+
   function describeContainingChanges(flags) {
-    if (flags === undefined || flags === null) return "—";
-    if (flags === 0) return "Regular";
-    const labels = CONTAINING_CHANGE_FLAGS.filter((t) => (flags & t.bit) === t.bit).map((t) => t.label);
-    return (labels.length ? labels.join(", ") : "Regular") + " (" + flags + ")";
+    return describeFlags(flags, CONTAINING_CHANGE_FLAGS, "Regular");
+  }
+
+  // Changed Elements API: per-element "type of change" bitmask (distinct from
+  // the changeset-level containingChanges above) and the DbOpcode-style values
+  // used in its "opcodes" array.
+  const CHANGE_TYPE_FLAGS = [
+    { bit: 1, label: "Property" },
+    { bit: 2, label: "Geometry" },
+    { bit: 4, label: "Placement" },
+    { bit: 8, label: "Indirect" },
+    { bit: 16, label: "Hidden" },
+    { bit: 32, label: "Parent" }
+  ];
+
+  function describeChangeType(flags) {
+    return describeFlags(flags, CHANGE_TYPE_FLAGS, "Unknown");
+  }
+
+  const OPCODE_LABELS = { 9: "Deleted", 18: "Inserted", 23: "Modified" };
+
+  function describeOpcode(opcode) {
+    if (opcode === undefined || opcode === null) return "—";
+    return OPCODE_LABELS[opcode] || ("Unknown (" + opcode + ")");
   }
 
   function escapeHtml(s) {
@@ -728,6 +796,22 @@
       } while (nextUrl);
     }
 
+    // Feeds a section from data that didn't come from opts.endpoint's paginated
+    // REST calls (e.g. a Changed Elements comparison result), reusing the same
+    // filter/sort/table/details machinery as the paginated sections.
+    function loadStatic(newItems) {
+      items = newItems;
+      byId = {};
+      items.forEach((it) => { byId[it.id] = it; });
+      nextUrl = null;
+      complete = true;
+      selectedId = null;
+      updateCount();
+      loadMoreBtn.classList.add("hidden");
+      detailsEl.innerHTML = "<p class='details-empty'>" + escapeHtml(opts.emptyMessage || "Select a row above to see its details.") + "</p>";
+      render();
+    }
+
     function getFiltered() {
       let out = items;
       if (filterText) {
@@ -796,11 +880,13 @@
           }
         });
       });
+
+      if (opts.onItemsChange) opts.onItemsChange(items);
     }
 
     loadMoreBtn.addEventListener("click", load);
 
-    return { reset, load, loadAll };
+    return { reset, load, loadAll, loadStatic };
   }
 
   const changesetsSection = createDataSection({
@@ -814,6 +900,7 @@
     responseKey: "changesets",
     endpoint: (id) => "/imodels/" + id + "/changesets",
     defaultSort: { key: "index", dir: "desc" },
+    onItemsChange: (items) => populateCompareSelects(items),
     columns: [
       { key: "index", label: "Index" },
       { key: "displayName", label: "Name" },
@@ -937,9 +1024,53 @@
     ]
   });
 
+  // Results of a Changed Elements comparison aren't paginated REST data, but
+  // loadStatic() lets this reuse the same filter/sort/table/details plumbing
+  // as the sections above instead of writing all of that a second time.
+  const compareSection = createDataSection({
+    sectionId: "compareSection",
+    tableId: "compareTable",
+    statusId: "compareStatus",
+    countId: "compareCount",
+    filterId: "compareFilter",
+    loadMoreBtnId: "loadMoreCompareBtn",
+    detailsId: "compareDetails",
+    responseKey: "unused",
+    endpoint: () => "",
+    defaultSort: { key: "element", dir: "asc" },
+    emptyMessage: "Run a comparison, then select a row above to see its details.",
+    columns: [
+      { key: "element", label: "Element ID" },
+      { key: "opcode", label: "Change", format: (r) => describeOpcode(r.opcode) },
+      { key: "type", label: "Type of Change", format: (r) => describeChangeType(r.type) },
+      { key: "classId", label: "Class ID" },
+      { key: "modelId", label: "Model ID" },
+      { key: "parentId", label: "Parent ID", format: (r) => (r.parentId && r.parentId !== "0") ? r.parentId : "—" }
+    ],
+    filterMatch: (r, f) =>
+      (r.element || "").toLowerCase().includes(f) ||
+      (r.classId || "").toLowerCase().includes(f) ||
+      (r.modelId || "").toLowerCase().includes(f) ||
+      describeOpcode(r.opcode).toLowerCase().includes(f) ||
+      describeChangeType(r.type).toLowerCase().includes(f) ||
+      (r.properties || []).some((p) => (p || "").toLowerCase().includes(f)),
+    detailTitle: (r) => "Element " + r.element + " — " + describeOpcode(r.opcode),
+    detailFields: (r) => [
+      ["Element ID", r.element],
+      ["Class ID", r.classId],
+      ["Opcode", describeOpcode(r.opcode)],
+      ["Type of change", describeChangeType(r.type)],
+      ["Model ID", r.modelId],
+      ["Parent ID", (r.parentId && r.parentId !== "0") ? r.parentId : null],
+      ["Parent class ID", (r.parentClassId && r.parentClassId !== "0") ? r.parentClassId : null],
+      ["Changed properties", (r.properties && r.properties.length) ? r.properties.join(", ") : null]
+    ]
+  });
+
   setupCollapse("changesetsSection", "changesetsHeader");
   setupCollapse("groupsSection", "groupsHeader");
   setupCollapse("briefcasesSection", "briefcasesHeader");
+  setupCollapse("compareSection", "compareHeader");
 
   // The API doesn't expose a total-count field or a $count parameter (checked
   // against the docs), so the exact total has to come from somewhere else per
@@ -977,6 +1108,167 @@
     }
   });
 
+  // ---------------- Compare changesets (Changed Elements API) ----------------
+  // Separate product surface from imodels-v2: POST creates an async job, GET
+  // polls it until Completed/Failed, and the actual results live behind a
+  // separate "comparison.href" link fetched once the job finishes.
+
+  const compareStartSelect = el("compareStartSelect");
+  const compareEndSelect = el("compareEndSelect");
+  const runComparisonBtn = el("runComparisonBtn");
+  const cancelComparisonBtn = el("cancelComparisonBtn");
+  const compareJobStatusEl = el("compareJobStatus");
+
+  let currentITwinId = null;
+  let currentIModelId = null;
+  let compareJobId = null;
+  let comparePollHandle = null;
+
+  function populateCompareSelects(items) {
+    const sorted = items.slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+    const prevStart = compareStartSelect.value;
+    const prevEnd = compareEndSelect.value;
+    const optionsHtml = "<option value=''>-- select --</option>" + sorted.map((cs) =>
+      "<option value='" + escapeHtml(cs.id) + "'>#" + cs.index + " " + escapeHtml(cs.displayName || cs.id) + "</option>"
+    ).join("");
+    compareStartSelect.innerHTML = optionsHtml;
+    compareEndSelect.innerHTML = optionsHtml;
+    if (sorted.some((cs) => cs.id === prevStart)) compareStartSelect.value = prevStart;
+    if (sorted.some((cs) => cs.id === prevEnd)) compareEndSelect.value = prevEnd;
+  }
+
+  function resetCompareJobState() {
+    if (comparePollHandle) { clearTimeout(comparePollHandle); comparePollHandle = null; }
+    compareJobId = null;
+    cancelComparisonBtn.classList.add("hidden");
+    runComparisonBtn.disabled = false;
+    setStatus(compareJobStatusEl, "", "");
+  }
+
+  function finishCompareJob() {
+    comparePollHandle = null;
+    runComparisonBtn.disabled = false;
+    cancelComparisonBtn.classList.add("hidden");
+  }
+
+  // The four parallel arrays (elements[i], classIds[i], opcodes[i], ...) all
+  // describe the same element at the same index -- zip them into row objects
+  // the table/details machinery can work with.
+  function changedElementsToRows(blob) {
+    const n = (blob.elements || []).length;
+    const rows = [];
+    for (let i = 0; i < n; i++) {
+      rows.push({
+        id: blob.elements[i],
+        element: blob.elements[i],
+        classId: blob.classIds ? blob.classIds[i] : null,
+        opcode: blob.opcodes ? blob.opcodes[i] : null,
+        type: blob.type ? blob.type[i] : null,
+        modelId: blob.modelIds ? blob.modelIds[i] : null,
+        parentId: blob.parentIds ? blob.parentIds[i] : null,
+        parentClassId: blob.parentClassIds ? blob.parentClassIds[i] : null,
+        properties: blob.properties ? blob.properties[i] : null
+      });
+    }
+    return rows;
+  }
+
+  async function pollComparisonJob() {
+    if (!compareJobId) return;
+    try {
+      const url = API_BASE + "/changedelements/comparisonjob/" + encodeURIComponent(compareJobId) +
+        "/itwin/" + encodeURIComponent(currentITwinId) + "/imodel/" + encodeURIComponent(currentIModelId);
+      const data = await apiGet(url);
+      const job = data && data.comparisonJob;
+      if (!job) throw new Error("Unexpected response from the Changed Elements API.");
+
+      if (job.status === "Completed") {
+        setStatus(compareJobStatusEl, "Comparison complete — fetching results…", "loading");
+        const href = job.comparison && job.comparison.href;
+        if (!href) throw new Error("Comparison completed but no result link was returned.");
+        const blobResp = await fetch(href, {
+          headers: { "Authorization": "Bearer " + getToken(), "Accept": ACCEPT_HEADER }
+        });
+        if (!blobResp.ok) throw new Error("HTTP " + blobResp.status + " fetching comparison results.");
+        const blob = await blobResp.json();
+        const rows = changedElementsToRows(blob);
+        compareSection.loadStatic(rows);
+        setStatus(compareJobStatusEl, rows.length + " changed element" + (rows.length === 1 ? "" : "s") + " found.", "ok");
+        finishCompareJob();
+      } else if (job.status === "Failed") {
+        setStatus(compareJobStatusEl, "Comparison job failed.", "err");
+        finishCompareJob();
+      } else {
+        const progress = job.maxProgress ? " (" + job.currentProgress + "/" + job.maxProgress + ")" : "";
+        setStatus(compareJobStatusEl, "Status: " + job.status + progress + "…", "loading");
+        comparePollHandle = setTimeout(pollComparisonJob, 4000);
+      }
+    } catch (err) {
+      setStatus(compareJobStatusEl, err.message, "err");
+      finishCompareJob();
+    }
+  }
+
+  runComparisonBtn.addEventListener("click", async () => {
+    const startId = compareStartSelect.value;
+    const endId = compareEndSelect.value;
+    if (!startId || !endId) {
+      setStatus(compareJobStatusEl, "Select both a start and an end changeset.", "err");
+      return;
+    }
+    if (!currentITwinId || !currentIModelId) {
+      setStatus(compareJobStatusEl, "Select an iModel first.", "err");
+      return;
+    }
+    runComparisonBtn.disabled = true;
+    cancelComparisonBtn.classList.remove("hidden");
+    setStatus(compareJobStatusEl, "Creating comparison job…", "loading");
+    compareSection.loadStatic([]);
+    try {
+      const token = getToken();
+      if (!token) throw new Error("Please enter an access token first.");
+      const resp = await fetch(API_BASE + "/changedelements/comparisonjob", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Accept": ACCEPT_HEADER,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ iTwinId: currentITwinId, iModelId: currentIModelId, startChangesetId: startId, endChangesetId: endId })
+      });
+      const text = await resp.text();
+      let data = null;
+      try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
+      if (!resp.ok) {
+        const msg = data && data.error ? (data.error.message || JSON.stringify(data.error)) : (text || resp.statusText);
+        throw new Error("HTTP " + resp.status + " " + resp.statusText + " — " + msg);
+      }
+      const job = data && data.comparisonJob;
+      if (!job || !job.jobId) throw new Error("Unexpected response creating the comparison job.");
+      compareJobId = job.jobId;
+      setStatus(compareJobStatusEl, "Status: " + job.status + "…", "loading");
+      comparePollHandle = setTimeout(pollComparisonJob, 2000);
+    } catch (err) {
+      setStatus(compareJobStatusEl, err.message, "err");
+      finishCompareJob();
+    }
+  });
+
+  cancelComparisonBtn.addEventListener("click", async () => {
+    const jobIdToCancel = compareJobId;
+    finishCompareJob();
+    setStatus(compareJobStatusEl, "Cancelled.", "");
+    if (jobIdToCancel && currentITwinId && currentIModelId) {
+      try {
+        await fetch(API_BASE + "/changedelements/comparisonjob/" + encodeURIComponent(jobIdToCancel) +
+          "/itwin/" + encodeURIComponent(currentITwinId) + "/imodel/" + encodeURIComponent(currentIModelId), {
+          method: "DELETE",
+          headers: { "Authorization": "Bearer " + getToken(), "Accept": ACCEPT_HEADER }
+        });
+      } catch (e) { /* best-effort cleanup, job will time out server-side regardless */ }
+    }
+  });
+
   // ---------------- iModels ----------------
 
   let iModelsNextUrl = null;
@@ -996,10 +1288,15 @@
       changesetsSection.reset(null);
       groupsSection.reset(null);
       briefcasesSection.reset(null);
+      compareSection.reset(null);
       el("changesetsSection").classList.add("hidden");
       el("groupsSection").classList.add("hidden");
       el("briefcasesSection").classList.add("hidden");
+      el("compareSection").classList.add("hidden");
       el("changesetsTotalCount").textContent = "";
+      resetCompareJobState();
+      currentITwinId = null;
+      currentIModelId = null;
       iModelMeta.innerHTML = "";
     }
 
@@ -1021,6 +1318,7 @@
       iModelsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
       loadMoreIModelsBtn.classList.toggle("hidden", !iModelsNextUrl);
 
+      currentITwinId = projectId;
       addItwinToHistory(projectId);
 
       const total = Object.keys(iModelsById).length;
@@ -1049,14 +1347,18 @@
     const basic = iModelsById[id] || {};
     iModelMeta.innerHTML = basic.displayName ? "<div class='imodel-meta'>Selected: " + escapeHtml(basic.displayName) + "</div>" : "";
 
+    currentIModelId = id;
+
     // Each section owns its own state — selecting a new iModel just re-seeds
     // all three independently; they don't share data or selection with each other.
     changesetsSection.reset(id);
     groupsSection.reset(id);
     briefcasesSection.reset(id);
+    compareSection.reset(id);
     changesetsTotalCountEl.textContent = "";
     groupsCountAllBtn.disabled = false;
     groupsCountAllBtn.textContent = "Count all";
+    resetCompareJobState();
 
     fetchIModelDetails(id);
     changesetsSection.load();
