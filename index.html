@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iModel History Browser</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e222b;
+    --border: #2a2f3a;
+    --text: #e6e9ef;
+    --text-dim: #9aa3b2;
+    --accent: #4da3ff;
+    --accent-dim: #2f6db8;
+    --ok: #4caf7d;
+    --warn: #e0a030;
+    --err: #e5484d;
+    --mono: ui-monospace, SFMono-Regular, Consolas, "Courier New", monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+  }
+  body { padding: 24px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-dim); font-size: 13px; margin: 0 0 20px; }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .card h2 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--text-dim);
+    margin: 0 0 12px;
+    font-weight: 600;
+  }
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  input[type=text], input[type=password], textarea {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 13px;
+    resize: vertical;
+  }
+  textarea { min-height: 60px; }
+  input:focus, textarea:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .row > .field { flex: 1 1 260px; }
+  .field { margin-bottom: 0; }
+  button {
+    background: var(--accent-dim);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  button:hover { background: var(--accent); }
+  button:disabled { background: #333844; color: #777; cursor: not-allowed; }
+  button.secondary {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-weight: 500;
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+  button.secondary:hover { color: var(--text); border-color: var(--accent-dim); }
+  select {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: var(--sans);
+  }
+  .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .checkbox-row input { width: auto; }
+  .checkbox-row label { margin: 0; color: var(--text-dim); font-size: 12px; }
+  .grid3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  @media (max-width: 900px) { .grid3 { grid-template-columns: 1fr; } }
+  .col-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .col-head .count { font-size: 11px; color: var(--text-dim); }
+  .status { font-size: 12px; margin-top: 8px; min-height: 16px; }
+  .status.ok { color: var(--ok); }
+  .status.err { color: var(--err); white-space: pre-wrap; }
+  .status.loading { color: var(--warn); }
+  .hidden { display: none !important; }
+  .imodel-meta {
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+  .details-empty {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-style: italic;
+  }
+  .kv-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
+  .kv-table tr { border-bottom: 1px solid var(--border); }
+  .kv-table tr:last-child { border-bottom: none; }
+  .kv-table td { padding: 6px 8px; vertical-align: top; }
+  .kv-table td.k { color: var(--text-dim); width: 220px; font-family: var(--mono); font-size: 12px; }
+  .kv-table td.v { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  pre.json {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px;
+    font-size: 12px;
+    overflow-x: auto;
+    max-height: 400px;
+    margin: 0;
+  }
+  details summary {
+    cursor: pointer;
+    color: var(--text-dim);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent-dim);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    margin-right: 8px;
+  }
+  .card h2 { display: flex; align-items: center; }
+</style>
+</head>
+<body>
+
+<h1>iModel History Browser</h1>
+<p class="subtitle">Browse iModels, changesets, changeset groups and briefcases via the Bentley iTwin Platform iModels API v2.</p>
+
+<div class="card">
+  <h2><span class="step-badge">1</span>Access Token</h2>
+  <div class="field">
+    <label for="tokenInput">Bearer access token (with the <code>itwin-platform</code> OAuth scope)</label>
+    <textarea id="tokenInput" placeholder="eyJhbGciOi... (paste with or without the 'Bearer ' prefix)"></textarea>
+  </div>
+  <div class="checkbox-row">
+    <input type="checkbox" id="rememberToken">
+    <label for="rememberToken">Keep token in this browser tab only (sessionStorage) — cleared when the tab closes</label>
+  </div>
+</div>
+
+<div class="card">
+  <h2><span class="step-badge">2</span>iTwin (Project) ID</h2>
+  <div class="row">
+    <div class="field">
+      <label for="projectIdInput">iTwin / Project ID (GUID)</label>
+      <input type="text" id="projectIdInput" placeholder="e.g. ad0ba809-9241-48ad-9eb0-c8038c1a1d51">
+    </div>
+    <button id="loadIModelsBtn">Load iModels</button>
+  </div>
+  <div id="iModelsStatus" class="status"></div>
+</div>
+
+<div class="card hidden" id="iModelSelectCard">
+  <h2><span class="step-badge">3</span>iModel</h2>
+  <div class="row">
+    <div class="field">
+      <label for="iModelSelect">Select an iModel</label>
+      <select id="iModelSelect"><option value="">-- select an iModel --</option></select>
+    </div>
+    <button id="loadMoreIModelsBtn" class="secondary hidden">Load more iModels</button>
+  </div>
+  <div id="iModelMeta" class="imodel-meta"></div>
+</div>
+
+<div class="card hidden" id="listsCard">
+  <h2><span class="step-badge">4</span>Changesets, Changeset Groups &amp; Briefcases</h2>
+  <div class="grid3">
+    <div>
+      <div class="col-head">
+        <label style="margin:0">Changesets</label>
+        <span class="count" id="changesetsCount"></span>
+      </div>
+      <select id="changesetsSelect"><option value="">-- select --</option></select>
+      <div id="changesetsStatus" class="status"></div>
+      <button id="loadMoreChangesetsBtn" class="secondary hidden" style="margin-top:6px;">Load more</button>
+    </div>
+    <div>
+      <div class="col-head">
+        <label style="margin:0">Changeset Groups</label>
+        <span class="count" id="groupsCount"></span>
+      </div>
+      <select id="groupsSelect"><option value="">-- select --</option></select>
+      <div id="groupsStatus" class="status"></div>
+      <button id="loadMoreGroupsBtn" class="secondary hidden" style="margin-top:6px;">Load more</button>
+    </div>
+    <div>
+      <div class="col-head">
+        <label style="margin:0">Briefcases</label>
+        <span class="count" id="briefcasesCount"></span>
+      </div>
+      <select id="briefcasesSelect"><option value="">-- select --</option></select>
+      <div id="briefcasesStatus" class="status"></div>
+      <button id="loadMoreBriefcasesBtn" class="secondary hidden" style="margin-top:6px;">Load more</button>
+    </div>
+  </div>
+</div>
+
+<div class="card hidden" id="detailsCard">
+  <h2>Details</h2>
+  <div id="detailsBody"><p class="details-empty">Select an iModel, changeset, changeset group or briefcase above to see its details here.</p></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const API_BASE = "https://api.bentley.com";
+  const ACCEPT_HEADER = "application/vnd.bentley.itwin-platform.v2+json";
+  const PAGE_SIZE = 100;
+
+  const el = (id) => document.getElementById(id);
+
+  const tokenInput = el("tokenInput");
+  const rememberToken = el("rememberToken");
+  const projectIdInput = el("projectIdInput");
+  const loadIModelsBtn = el("loadIModelsBtn");
+  const iModelsStatus = el("iModelsStatus");
+
+  const iModelSelectCard = el("iModelSelectCard");
+  const iModelSelect = el("iModelSelect");
+  const loadMoreIModelsBtn = el("loadMoreIModelsBtn");
+  const iModelMeta = el("iModelMeta");
+
+  const listsCard = el("listsCard");
+  const detailsCard = el("detailsCard");
+  const detailsBody = el("detailsBody");
+
+  const changesetsSelect = el("changesetsSelect");
+  const groupsSelect = el("groupsSelect");
+  const briefcasesSelect = el("briefcasesSelect");
+
+  const changesetsStatus = el("changesetsStatus");
+  const groupsStatus = el("groupsStatus");
+  const briefcasesStatus = el("briefcasesStatus");
+
+  const changesetsCount = el("changesetsCount");
+  const groupsCount = el("groupsCount");
+  const briefcasesCount = el("briefcasesCount");
+
+  const loadMoreChangesetsBtn = el("loadMoreChangesetsBtn");
+  const loadMoreGroupsBtn = el("loadMoreGroupsBtn");
+  const loadMoreBriefcasesBtn = el("loadMoreBriefcasesBtn");
+
+  // ---- state ----
+  let iModelsNextUrl = null;
+  let iModelsById = {};
+
+  let currentIModelId = null;
+  let changesetsNextUrl = null;
+  let groupsNextUrl = null;
+  let briefcasesNextUrl = null;
+
+  let changesetsById = {};
+  let groupsById = {};
+  let briefcasesById = {};
+
+  // ---- token persistence (opt-in, sessionStorage only) ----
+  try {
+    const saved = sessionStorage.getItem("imhb_token");
+    if (saved) {
+      tokenInput.value = saved;
+      rememberToken.checked = true;
+    }
+  } catch (e) { /* sessionStorage unavailable, ignore */ }
+
+  rememberToken.addEventListener("change", () => {
+    try {
+      if (rememberToken.checked) sessionStorage.setItem("imhb_token", tokenInput.value);
+      else sessionStorage.removeItem("imhb_token");
+    } catch (e) { /* ignore */ }
+  });
+  tokenInput.addEventListener("input", () => {
+    if (rememberToken.checked) {
+      try { sessionStorage.setItem("imhb_token", tokenInput.value); } catch (e) { /* ignore */ }
+    }
+  });
+
+  function getToken() {
+    let t = tokenInput.value.trim();
+    if (t.toLowerCase().startsWith("bearer ")) t = t.slice(7).trim();
+    return t;
+  }
+
+  function setStatus(node, message, kind) {
+    node.textContent = message || "";
+    node.className = "status" + (kind ? " " + kind : "");
+  }
+
+  async function apiGet(url) {
+    const token = getToken();
+    if (!token) throw new Error("Please enter an access token first.");
+    let resp;
+    try {
+      resp = await fetch(url, {
+        method: "GET",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Accept": ACCEPT_HEADER
+        }
+      });
+    } catch (networkErr) {
+      throw new Error(
+        "Network/CORS error calling " + url + "\n" +
+        "This can happen if the browser blocks the cross-origin request or there is no network connectivity.\n" +
+        String(networkErr)
+      );
+    }
+    const text = await resp.text();
+    let body = null;
+    try { body = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
+    if (!resp.ok) {
+      const apiMsg = body && body.error
+        ? (body.error.message || JSON.stringify(body.error))
+        : (text || resp.statusText);
+      throw new Error("HTTP " + resp.status + " " + resp.statusText + " — " + apiMsg);
+    }
+    return body;
+  }
+
+  function clearSelect(select, placeholder) {
+    select.innerHTML = "";
+    const opt = document.createElement("option");
+    opt.value = "";
+    opt.textContent = placeholder || "-- select --";
+    select.appendChild(opt);
+  }
+
+  function fmtDate(s) {
+    if (!s) return "—";
+    const d = new Date(s);
+    if (isNaN(d.getTime())) return s;
+    return d.toLocaleString();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function renderDetails(title, fields, rawObj) {
+    detailsCard.classList.remove("hidden");
+    let html = "<h3 style='margin:0 0 10px;font-size:15px;'>" + escapeHtml(title) + "</h3>";
+    html += "<table class='kv-table'>";
+    for (const [k, v] of fields) {
+      html += "<tr><td class='k'>" + escapeHtml(k) + "</td><td class='v'>" + escapeHtml(v === null || v === undefined || v === "" ? "—" : v) + "</td></tr>";
+    }
+    html += "</table>";
+    html += "<details><summary>Raw JSON</summary><pre class='json'>" + escapeHtml(JSON.stringify(rawObj, null, 2)) + "</pre></details>";
+    detailsBody.innerHTML = html;
+    detailsCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  // ---------------- iModels ----------------
+
+  async function loadIModels(reset) {
+    const projectId = projectIdInput.value.trim();
+    if (!projectId) {
+      setStatus(iModelsStatus, "Enter an iTwin (Project) ID first.", "err");
+      return;
+    }
+    if (reset) {
+      iModelsById = {};
+      iModelsNextUrl = null;
+      clearSelect(iModelSelect, "-- select an iModel --");
+      iModelSelectCard.classList.add("hidden");
+      listsCard.classList.add("hidden");
+      detailsCard.classList.add("hidden");
+    }
+
+    const url = iModelsNextUrl || (API_BASE + "/imodels/?iTwinId=" + encodeURIComponent(projectId) + "&$top=" + PAGE_SIZE);
+    setStatus(iModelsStatus, "Loading iModels…", "loading");
+    loadIModelsBtn.disabled = true;
+    loadMoreIModelsBtn.disabled = true;
+
+    try {
+      const data = await apiGet(url);
+      const items = (data && data.iModels) || [];
+      items.forEach((im) => {
+        iModelsById[im.id] = im;
+        const opt = document.createElement("option");
+        opt.value = im.id;
+        opt.textContent = im.displayName || im.name || im.id;
+        iModelSelect.appendChild(opt);
+      });
+      iModelsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
+      loadMoreIModelsBtn.classList.toggle("hidden", !iModelsNextUrl);
+
+      const total = Object.keys(iModelsById).length;
+      if (total === 0) {
+        setStatus(iModelsStatus, "No iModels found for this iTwin ID.", "err");
+      } else {
+        setStatus(iModelsStatus, "Loaded " + total + " iModel" + (total === 1 ? "" : "s") + ".", "ok");
+        iModelSelectCard.classList.remove("hidden");
+      }
+    } catch (err) {
+      setStatus(iModelsStatus, err.message, "err");
+    } finally {
+      loadIModelsBtn.disabled = false;
+      loadMoreIModelsBtn.disabled = false;
+    }
+  }
+
+  loadIModelsBtn.addEventListener("click", () => loadIModels(true));
+  projectIdInput.addEventListener("keydown", (e) => { if (e.key === "Enter") loadIModels(true); });
+  loadMoreIModelsBtn.addEventListener("click", () => loadIModels(false));
+
+  iModelSelect.addEventListener("change", async () => {
+    const id = iModelSelect.value;
+    if (!id) return;
+    currentIModelId = id;
+    listsCard.classList.remove("hidden");
+
+    changesetsById = {}; groupsById = {}; briefcasesById = {};
+    changesetsNextUrl = null; groupsNextUrl = null; briefcasesNextUrl = null;
+    clearSelect(changesetsSelect, "-- select --");
+    clearSelect(groupsSelect, "-- select --");
+    clearSelect(briefcasesSelect, "-- select --");
+    changesetsCount.textContent = "";
+    groupsCount.textContent = "";
+    briefcasesCount.textContent = "";
+    loadMoreChangesetsBtn.classList.add("hidden");
+    loadMoreGroupsBtn.classList.add("hidden");
+    loadMoreBriefcasesBtn.classList.add("hidden");
+
+    // Show basic info immediately, then fetch full details.
+    const basic = iModelsById[id] || {};
+    iModelMeta.textContent = basic.displayName ? "Selected: " + basic.displayName : "";
+
+    fetchIModelDetails(id);
+    loadChangesets(true);
+    loadGroups(true);
+    loadBriefcases(true);
+  });
+
+  async function fetchIModelDetails(id) {
+    try {
+      const data = await apiGet(API_BASE + "/imodels/" + id);
+      const im = data && data.iModel;
+      if (!im) return;
+      renderDetails("iModel — " + (im.displayName || im.id), [
+        ["ID", im.id],
+        ["Display name", im.displayName],
+        ["Name", im.name],
+        ["Description", im.description],
+        ["State", im.state],
+        ["iTwin ID", im.iTwinId],
+        ["Data center location", im.dataCenterLocation],
+        ["Created", fmtDate(im.createdDateTime)],
+        ["Last changeset push", fmtDate(im.lastChangesetPushDateTime)],
+        ["Secured", im.isSecured],
+        ["Containers enabled", im.containersEnabled]
+      ], im);
+    } catch (err) {
+      // Non-fatal — the row-level metadata from the list call still fills the dropdown.
+    }
+  }
+
+  // ---------------- Changesets ----------------
+
+  async function loadChangesets(reset) {
+    if (!currentIModelId) return;
+    if (reset) {
+      changesetsById = {};
+      changesetsNextUrl = null;
+      clearSelect(changesetsSelect, "-- select --");
+    }
+    const url = changesetsNextUrl || (API_BASE + "/imodels/" + currentIModelId + "/changesets?$top=" + PAGE_SIZE);
+    setStatus(changesetsStatus, "Loading…", "loading");
+    try {
+      const data = await apiGet(url);
+      const items = (data && data.changesets) || [];
+      items.forEach((cs) => {
+        changesetsById[cs.id] = cs;
+        const opt = document.createElement("option");
+        opt.value = cs.id;
+        const label = (cs.index != null ? "#" + cs.index + " " : "") + (cs.displayName || cs.id);
+        opt.textContent = label;
+        changesetsSelect.appendChild(opt);
+      });
+      changesetsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
+      loadMoreChangesetsBtn.classList.toggle("hidden", !changesetsNextUrl);
+      const total = Object.keys(changesetsById).length;
+      changesetsCount.textContent = total ? total + " loaded" : "";
+      setStatus(changesetsStatus, total ? "" : "No changesets found.", total ? "" : "ok");
+    } catch (err) {
+      setStatus(changesetsStatus, err.message, "err");
+    }
+  }
+
+  loadMoreChangesetsBtn.addEventListener("click", () => loadChangesets(false));
+
+  changesetsSelect.addEventListener("change", () => {
+    const id = changesetsSelect.value;
+    if (!id) return;
+    const cs = changesetsById[id];
+    if (!cs) return;
+    renderDetails("Changeset — " + (cs.displayName || cs.id), [
+      ["ID", cs.id],
+      ["Index", cs.index],
+      ["Display name", cs.displayName],
+      ["Description", cs.description],
+      ["State", cs.state],
+      ["Containing changes", cs.containingChanges],
+      ["Parent ID", cs.parentId],
+      ["Group ID", cs.groupId],
+      ["Briefcase ID", cs.briefcaseId],
+      ["Creator ID", cs.creatorId],
+      ["Pushed", fmtDate(cs.pushDateTime)],
+      ["File size (bytes)", cs.fileSize]
+    ], cs);
+  });
+
+  // ---------------- Changeset Groups ----------------
+
+  async function loadGroups(reset) {
+    if (!currentIModelId) return;
+    if (reset) {
+      groupsById = {};
+      groupsNextUrl = null;
+      clearSelect(groupsSelect, "-- select --");
+    }
+    const url = groupsNextUrl || (API_BASE + "/imodels/" + currentIModelId + "/changesetgroups?$top=" + PAGE_SIZE);
+    setStatus(groupsStatus, "Loading…", "loading");
+    try {
+      const data = await apiGet(url);
+      const items = (data && data.changesetGroups) || [];
+      items.forEach((g) => {
+        groupsById[g.id] = g;
+        const opt = document.createElement("option");
+        opt.value = g.id;
+        opt.textContent = (g.description ? g.description + " — " : "") + g.id;
+        groupsSelect.appendChild(opt);
+      });
+      groupsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
+      loadMoreGroupsBtn.classList.toggle("hidden", !groupsNextUrl);
+      const total = Object.keys(groupsById).length;
+      groupsCount.textContent = total ? total + " loaded" : "";
+      setStatus(groupsStatus, total ? "" : "No changeset groups found.", total ? "" : "ok");
+    } catch (err) {
+      setStatus(groupsStatus, err.message, "err");
+    }
+  }
+
+  loadMoreGroupsBtn.addEventListener("click", () => loadGroups(false));
+
+  groupsSelect.addEventListener("change", () => {
+    const id = groupsSelect.value;
+    if (!id) return;
+    const g = groupsById[id];
+    if (!g) return;
+    renderDetails("Changeset Group — " + g.id, [
+      ["ID", g.id],
+      ["State", g.state],
+      ["Description", g.description],
+      ["Creator ID", g.creatorId],
+      ["Created", fmtDate(g.createdDateTime)]
+    ], g);
+  });
+
+  // ---------------- Briefcases ----------------
+
+  async function loadBriefcases(reset) {
+    if (!currentIModelId) return;
+    if (reset) {
+      briefcasesById = {};
+      briefcasesNextUrl = null;
+      clearSelect(briefcasesSelect, "-- select --");
+    }
+    const url = briefcasesNextUrl || (API_BASE + "/imodels/" + currentIModelId + "/briefcases?$top=" + PAGE_SIZE);
+    setStatus(briefcasesStatus, "Loading…", "loading");
+    try {
+      const data = await apiGet(url);
+      const items = (data && data.briefcases) || [];
+      items.forEach((b) => {
+        briefcasesById[b.id] = b;
+        const opt = document.createElement("option");
+        opt.value = b.id;
+        opt.textContent = "#" + b.briefcaseId + " — " + (b.displayName || b.deviceName || b.id);
+        briefcasesSelect.appendChild(opt);
+      });
+      briefcasesNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
+      loadMoreBriefcasesBtn.classList.toggle("hidden", !briefcasesNextUrl);
+      const total = Object.keys(briefcasesById).length;
+      briefcasesCount.textContent = total ? total + " loaded" : "";
+      setStatus(briefcasesStatus, total ? "" : "No briefcases found.", total ? "" : "ok");
+    } catch (err) {
+      setStatus(briefcasesStatus, err.message, "err");
+    }
+  }
+
+  loadMoreBriefcasesBtn.addEventListener("click", () => loadBriefcases(false));
+
+  briefcasesSelect.addEventListener("change", () => {
+    const id = briefcasesSelect.value;
+    if (!id) return;
+    const b = briefcasesById[id];
+    if (!b) return;
+    renderDetails("Briefcase — #" + b.briefcaseId, [
+      ["ID", b.id],
+      ["Briefcase ID", b.briefcaseId],
+      ["Display name", b.displayName],
+      ["Device name", b.deviceName],
+      ["Owner ID", b.ownerId],
+      ["Acquired", fmtDate(b.acquiredDateTime)],
+      ["File size (bytes)", b.fileSize],
+      ["Application", b.application ? (b.application.name || b.application.id) : null]
+    ], b);
+  });
+
+})();
+</script>
+
+</body>
+</html>
