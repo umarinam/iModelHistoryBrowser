@@ -152,9 +152,20 @@
     flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 10px;
+    cursor: pointer;
   }
   .section-header h2 { margin: 0; }
   .section-header .count { font-size: 11px; color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .section-header-right { display: flex; align-items: center; gap: 10px; }
+  .section-header .chevron {
+    display: inline-block;
+    color: var(--text-dim);
+    font-size: 11px;
+    transition: transform .15s ease;
+  }
+  .section-card.collapsed .section-header { margin-bottom: 0; }
+  .section-card.collapsed .section-header .chevron { transform: rotate(-90deg); }
+  .section-card.collapsed .section-body { display: none; }
   .section-controls {
     display: flex;
     gap: 10px;
@@ -255,66 +266,81 @@
      same selected iModel but do not otherwise affect one another. -->
 
 <div class="card section-card hidden" id="changesetsSection">
-  <div class="section-header">
+  <div class="section-header" id="changesetsHeader">
     <h2><span class="step-badge">4</span>Changesets</h2>
-    <span class="count" id="changesetsCount"></span>
+    <div class="section-header-right">
+      <span class="count" id="changesetsCount"></span>
+      <span class="chevron">▾</span>
+    </div>
   </div>
-  <div class="section-controls">
-    <input type="search" id="changesetsFilter" placeholder="Filter by index, name, state, description...">
-    <div id="changesetsStatus" class="status" style="margin:0"></div>
+  <div class="section-body">
+    <div class="section-controls">
+      <input type="search" id="changesetsFilter" placeholder="Filter by index, name, state, description...">
+      <div id="changesetsStatus" class="status" style="margin:0"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="changesetsTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="section-footer">
+      <button id="loadMoreChangesetsBtn" class="secondary hidden">Load more changesets</button>
+    </div>
+    <div class="details-panel" id="changesetsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
   </div>
-  <div class="table-wrap">
-    <table class="data-table" id="changesetsTable">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <div class="section-footer">
-    <button id="loadMoreChangesetsBtn" class="secondary hidden">Load more changesets</button>
-  </div>
-  <div class="details-panel" id="changesetsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
 </div>
 
 <div class="card section-card hidden" id="groupsSection">
-  <div class="section-header">
+  <div class="section-header" id="groupsHeader">
     <h2><span class="step-badge">5</span>Changeset Groups</h2>
-    <span class="count" id="groupsCount"></span>
+    <div class="section-header-right">
+      <span class="count" id="groupsCount"></span>
+      <span class="chevron">▾</span>
+    </div>
   </div>
-  <div class="section-controls">
-    <input type="search" id="groupsFilter" placeholder="Filter by id, state, description...">
-    <div id="groupsStatus" class="status" style="margin:0"></div>
+  <div class="section-body">
+    <div class="section-controls">
+      <input type="search" id="groupsFilter" placeholder="Filter by id, state, description...">
+      <div id="groupsStatus" class="status" style="margin:0"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="groupsTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="section-footer">
+      <button id="loadMoreGroupsBtn" class="secondary hidden">Load more groups</button>
+    </div>
+    <div class="details-panel" id="groupsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
   </div>
-  <div class="table-wrap">
-    <table class="data-table" id="groupsTable">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <div class="section-footer">
-    <button id="loadMoreGroupsBtn" class="secondary hidden">Load more groups</button>
-  </div>
-  <div class="details-panel" id="groupsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
 </div>
 
 <div class="card section-card hidden" id="briefcasesSection">
-  <div class="section-header">
+  <div class="section-header" id="briefcasesHeader">
     <h2><span class="step-badge">6</span>Briefcases</h2>
-    <span class="count" id="briefcasesCount"></span>
+    <div class="section-header-right">
+      <span class="count" id="briefcasesCount"></span>
+      <span class="chevron">▾</span>
+    </div>
   </div>
-  <div class="section-controls">
-    <input type="search" id="briefcasesFilter" placeholder="Filter by id, name, device, owner...">
-    <div id="briefcasesStatus" class="status" style="margin:0"></div>
+  <div class="section-body">
+    <div class="section-controls">
+      <input type="search" id="briefcasesFilter" placeholder="Filter by id, name, device, owner...">
+      <div id="briefcasesStatus" class="status" style="margin:0"></div>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table" id="briefcasesTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="section-footer">
+      <button id="loadMoreBriefcasesBtn" class="secondary hidden">Load more briefcases</button>
+    </div>
+    <div class="details-panel" id="briefcasesDetails"><p class="details-empty">Select a row above to see its details.</p></div>
   </div>
-  <div class="table-wrap">
-    <table class="data-table" id="briefcasesTable">
-      <thead></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <div class="section-footer">
-    <button id="loadMoreBriefcasesBtn" class="secondary hidden">Load more briefcases</button>
-  </div>
-  <div class="details-panel" id="briefcasesDetails"><p class="details-empty">Select a row above to see its details.</p></div>
 </div>
 
 <script>
@@ -455,6 +481,57 @@
     if (!user) return null;
     const full = [user.givenName, user.surname].filter(Boolean).join(" ");
     return full || user.displayName || user.email || null;
+  }
+
+  // Builds the enrichRows/enrichDetails trio for a section whose items carry a raw
+  // user-id field (briefcase ownerId, changeset/group creatorId) that should be
+  // resolved into a name, email and activity stats via fetchUser().
+  function makeUserEnrichment(userIdKey, label) {
+    return {
+      enrichRows: (newItems, iModelId, rerender) => {
+        newItems.forEach((it) => {
+          const uid = it[userIdKey];
+          if (!uid) return;
+          fetchUser(iModelId, uid).then((user) => {
+            if (!user) return;
+            it._userDisplay = userDisplayName(user);
+            it._userEmail = user.email;
+            rerender();
+          });
+        });
+      },
+      enrichLabel: label,
+      enrichDetails: async (it, iModelId) => {
+        const user = await fetchUser(iModelId, it[userIdKey]);
+        if (!user) return null;
+        const stats = user.statistics || {};
+        return [
+          ["Name", userDisplayName(user)],
+          ["Email", user.email],
+          ["Pushed changesets", stats.pushedChangesetsCount],
+          ["Created named versions", stats.createdVersionsCount],
+          ["Briefcases acquired", stats.briefcasesCount],
+          ["Last access", fmtDate(stats.lastAccessTime)],
+          ["Last changeset push", fmtDate(stats.lastChangesetPushDate)]
+        ];
+      }
+    };
+  }
+
+  function setupCollapse(sectionId, headerId) {
+    const section = el(sectionId);
+    const header = el(headerId);
+    header.setAttribute("role", "button");
+    header.setAttribute("tabindex", "0");
+    header.setAttribute("aria-expanded", "true");
+    function toggle() {
+      const collapsed = section.classList.toggle("collapsed");
+      header.setAttribute("aria-expanded", String(!collapsed));
+    }
+    header.addEventListener("click", toggle);
+    header.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
   }
 
   // =========================================================================
@@ -636,13 +713,22 @@
       { key: "displayName", label: "Name" },
       { key: "state", label: "State" },
       { key: "containingChanges", label: "Changes" },
+      {
+        key: "creatorId",
+        label: "Creator",
+        format: (it) => it._userDisplay || ((it.creatorId || "").slice(0, 8) + (it.creatorId ? "…" : "—")),
+        sortValue: (it) => it._userDisplay || it.creatorId
+      },
       { key: "pushDateTime", label: "Pushed", format: (it) => fmtDate(it.pushDateTime) }
     ],
     filterMatch: (it, f) =>
       String(it.index).includes(f) ||
       (it.displayName || "").toLowerCase().includes(f) ||
       (it.description || "").toLowerCase().includes(f) ||
-      (it.state || "").toLowerCase().includes(f),
+      (it.state || "").toLowerCase().includes(f) ||
+      (it._userDisplay || "").toLowerCase().includes(f) ||
+      (it._userEmail || "").toLowerCase().includes(f),
+    ...makeUserEnrichment("creatorId", "Creator"),
     detailTitle: (cs) => "Changeset — " + (cs.displayName || cs.id),
     detailFields: (cs) => [
       ["ID", cs.id],
@@ -675,13 +761,21 @@
       { key: "id", label: "ID", format: (it) => it.id.slice(0, 8) + "…" },
       { key: "state", label: "State" },
       { key: "description", label: "Description" },
-      { key: "creatorId", label: "Creator", format: (it) => (it.creatorId || "").slice(0, 8) + (it.creatorId ? "…" : "—") },
+      {
+        key: "creatorId",
+        label: "Creator",
+        format: (it) => it._userDisplay || ((it.creatorId || "").slice(0, 8) + (it.creatorId ? "…" : "—")),
+        sortValue: (it) => it._userDisplay || it.creatorId
+      },
       { key: "createdDateTime", label: "Created", format: (it) => fmtDate(it.createdDateTime) }
     ],
     filterMatch: (it, f) =>
       (it.id || "").toLowerCase().includes(f) ||
       (it.state || "").toLowerCase().includes(f) ||
-      (it.description || "").toLowerCase().includes(f),
+      (it.description || "").toLowerCase().includes(f) ||
+      (it._userDisplay || "").toLowerCase().includes(f) ||
+      (it._userEmail || "").toLowerCase().includes(f),
+    ...makeUserEnrichment("creatorId", "Creator"),
     detailTitle: (g) => "Changeset Group — " + g.id,
     detailFields: (g) => [
       ["ID", g.id],
@@ -710,8 +804,8 @@
       {
         key: "ownerId",
         label: "Owner",
-        format: (it) => it._ownerDisplay || ((it.ownerId || "").slice(0, 8) + (it.ownerId ? "…" : "—")),
-        sortValue: (it) => it._ownerDisplay || it.ownerId
+        format: (it) => it._userDisplay || ((it.ownerId || "").slice(0, 8) + (it.ownerId ? "…" : "—")),
+        sortValue: (it) => it._userDisplay || it.ownerId
       },
       { key: "acquiredDateTime", label: "Acquired", format: (it) => fmtDate(it.acquiredDateTime) }
     ],
@@ -720,36 +814,9 @@
       (it.displayName || "").toLowerCase().includes(f) ||
       (it.deviceName || "").toLowerCase().includes(f) ||
       (it.ownerId || "").toLowerCase().includes(f) ||
-      (it._ownerDisplay || "").toLowerCase().includes(f) ||
-      (it._ownerEmail || "").toLowerCase().includes(f),
-    // Prefetch each briefcase's owner in the background so the Owner column
-    // upgrades from a raw user id to a name as soon as it resolves.
-    enrichRows: (newItems, iModelId, rerender) => {
-      newItems.forEach((b) => {
-        if (!b.ownerId) return;
-        fetchUser(iModelId, b.ownerId).then((user) => {
-          if (!user) return;
-          b._ownerDisplay = userDisplayName(user);
-          b._ownerEmail = user.email;
-          rerender();
-        });
-      });
-    },
-    enrichLabel: "Owner",
-    enrichDetails: async (b, iModelId) => {
-      const user = await fetchUser(iModelId, b.ownerId);
-      if (!user) return null;
-      const stats = user.statistics || {};
-      return [
-        ["Name", userDisplayName(user)],
-        ["Email", user.email],
-        ["Pushed changesets", stats.pushedChangesetsCount],
-        ["Created named versions", stats.createdVersionsCount],
-        ["Briefcases acquired", stats.briefcasesCount],
-        ["Last access", fmtDate(stats.lastAccessTime)],
-        ["Last changeset push", fmtDate(stats.lastChangesetPushDate)]
-      ];
-    },
+      (it._userDisplay || "").toLowerCase().includes(f) ||
+      (it._userEmail || "").toLowerCase().includes(f),
+    ...makeUserEnrichment("ownerId", "Owner"),
     detailTitle: (b) => "Briefcase — #" + b.briefcaseId,
     detailFields: (b) => [
       ["ID", b.id],
@@ -762,6 +829,10 @@
       ["Application", b.application ? (b.application.name || b.application.id) : null]
     ]
   });
+
+  setupCollapse("changesetsSection", "changesetsHeader");
+  setupCollapse("groupsSection", "groupsHeader");
+  setupCollapse("briefcasesSection", "briefcasesHeader");
 
   // ---------------- iModels ----------------
 
