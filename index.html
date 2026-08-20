@@ -380,6 +380,7 @@
     </div>
     <p class="hint-text">Start must be an earlier changeset than End — the API rejects equal or reversed pairs. Start is exclusive (its own changes aren't included) and End is inclusive, so to see just one changeset's own changes, pick the changeset immediately before it as Start. Picking an End auto-fills Start with the previous changeset for you.</p>
     <div id="compareJobStatus" class="status"></div>
+    <details class="hidden" id="compareRawWrap"><summary>Raw comparison response (for troubleshooting)</summary><pre class="json" id="compareRawJson"></pre></details>
 
     <div class="section-controls">
       <input type="search" id="compareFilter" placeholder="Filter by element id, class id, change type...">
@@ -1158,6 +1159,8 @@
     cancelComparisonBtn.classList.add("hidden");
     runComparisonBtn.disabled = false;
     setStatus(compareJobStatusEl, "", "");
+    el("compareRawWrap").classList.add("hidden");
+    el("compareRawJson").textContent = "";
   }
 
   function finishCompareJob() {
@@ -1168,8 +1171,12 @@
 
   // The four parallel arrays (elements[i], classIds[i], opcodes[i], ...) all
   // describe the same element at the same index -- zip them into row objects
-  // the table/details machinery can work with.
-  function changedElementsToRows(blob) {
+  // the table/details machinery can work with. The rest of this platform wraps
+  // single-object responses in a named key (iModel, user, comparisonJob, ...),
+  // so accept the blob either wrapped the same way ({ changedElements: {...} })
+  // or flat at the root, since the exact shape here isn't confirmed in the docs.
+  function changedElementsToRows(rawBlob) {
+    const blob = (rawBlob && rawBlob.changedElements) ? rawBlob.changedElements : (rawBlob || {});
     const n = (blob.elements || []).length;
     const rows = [];
     for (let i = 0; i < n; i++) {
@@ -1214,6 +1221,8 @@
         const blob = await blobResp.json();
         const rows = changedElementsToRows(blob);
         compareSection.loadStatic(rows);
+        el("compareRawJson").textContent = JSON.stringify(blob, null, 2);
+        el("compareRawWrap").classList.remove("hidden");
         setStatus(compareJobStatusEl, rows.length + " changed element" + (rows.length === 1 ? "" : "s") + " found.", "ok");
         finishCompareJob();
       } else if (job.status === "Failed") {
@@ -1250,6 +1259,8 @@
     runComparisonBtn.disabled = true;
     cancelComparisonBtn.classList.remove("hidden");
     setStatus(compareJobStatusEl, "Creating comparison job…", "loading");
+    el("compareRawWrap").classList.add("hidden");
+    el("compareRawJson").textContent = "";
     compareSection.loadStatic([]);
     try {
       const token = getToken();
