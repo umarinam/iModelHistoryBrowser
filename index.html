@@ -378,7 +378,7 @@
       <button id="runComparisonBtn">Compare</button>
       <button id="cancelComparisonBtn" class="secondary hidden">Cancel</button>
     </div>
-    <p class="hint-text">Tip: pick the same changeset for both Start and End to see just that one changeset's changes.</p>
+    <p class="hint-text">Start must be an earlier changeset than End — the API rejects equal or reversed pairs. Start is exclusive (its own changes aren't included) and End is inclusive, so to see just one changeset's own changes, pick the changeset immediately before it as Start. Picking an End auto-fills Start with the previous changeset for you.</p>
     <div id="compareJobStatus" class="status"></div>
 
     <div class="section-controls">
@@ -1123,19 +1123,34 @@
   let currentIModelId = null;
   let compareJobId = null;
   let comparePollHandle = null;
+  let compareChangesetsSorted = [];
 
   function populateCompareSelects(items) {
-    const sorted = items.slice().sort((a, b) => (a.index || 0) - (b.index || 0));
+    compareChangesetsSorted = items.slice().sort((a, b) => (a.index || 0) - (b.index || 0));
     const prevStart = compareStartSelect.value;
     const prevEnd = compareEndSelect.value;
-    const optionsHtml = "<option value=''>-- select --</option>" + sorted.map((cs) =>
+    const optionsHtml = "<option value=''>-- select --</option>" + compareChangesetsSorted.map((cs) =>
       "<option value='" + escapeHtml(cs.id) + "'>#" + cs.index + " " + escapeHtml(cs.displayName || cs.id) + "</option>"
     ).join("");
     compareStartSelect.innerHTML = optionsHtml;
     compareEndSelect.innerHTML = optionsHtml;
-    if (sorted.some((cs) => cs.id === prevStart)) compareStartSelect.value = prevStart;
-    if (sorted.some((cs) => cs.id === prevEnd)) compareEndSelect.value = prevEnd;
+    if (compareChangesetsSorted.some((cs) => cs.id === prevStart)) compareStartSelect.value = prevStart;
+    if (compareChangesetsSorted.some((cs) => cs.id === prevEnd)) compareEndSelect.value = prevEnd;
   }
+
+  // The most common thing someone wants is "what changed in this one changeset",
+  // which per the API's start-exclusive/end-inclusive range means Start has to be
+  // the *previous* changeset -- not the same one. Fill that in automatically so
+  // picking an End is enough for the common case, rather than making everyone
+  // learn the exclusive/inclusive rule to use this at all.
+  compareEndSelect.addEventListener("change", () => {
+    if (compareStartSelect.value) return;
+    const endId = compareEndSelect.value;
+    const endCs = compareChangesetsSorted.find((cs) => cs.id === endId);
+    if (!endCs) return;
+    const prevCs = compareChangesetsSorted.find((cs) => cs.index === endCs.index - 1);
+    if (prevCs) compareStartSelect.value = prevCs.id;
+  });
 
   function resetCompareJobState() {
     if (comparePollHandle) { clearTimeout(comparePollHandle); comparePollHandle = null; }
@@ -1220,6 +1235,12 @@
     const endId = compareEndSelect.value;
     if (!startId || !endId) {
       setStatus(compareJobStatusEl, "Select both a start and an end changeset.", "err");
+      return;
+    }
+    const startCs = compareChangesetsSorted.find((cs) => cs.id === startId);
+    const endCs = compareChangesetsSorted.find((cs) => cs.id === endId);
+    if (startCs && endCs && startCs.index >= endCs.index) {
+      setStatus(compareJobStatusEl, "Start must be an earlier changeset than End (the API rejects equal or reversed pairs).", "err");
       return;
     }
     if (!currentITwinId || !currentIModelId) {
