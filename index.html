@@ -1280,6 +1280,18 @@
       const text = await resp.text();
       let data = null;
       try { data = text ? JSON.parse(text) : null; } catch (e) { /* non-JSON body */ }
+
+      // The API deduplicates by changeset pair and rejects a repeat with 409
+      // "ComparisonExists" -- but jobId is always deterministically
+      // "{startChangesetId}-{endChangesetId}" per the docs, so the existing
+      // job can be looked up directly instead of treating this as a failure.
+      if (resp.status === 409) {
+        compareJobId = startId + "-" + endId;
+        setStatus(compareJobStatusEl, "A comparison for this pair already exists — fetching it…", "loading");
+        comparePollHandle = setTimeout(pollComparisonJob, 0);
+        return;
+      }
+
       if (!resp.ok) {
         const msg = data && data.error ? (data.error.message || JSON.stringify(data.error)) : (text || resp.statusText);
         throw new Error("HTTP " + resp.status + " " + resp.statusText + " — " + msg);
