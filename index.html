@@ -379,7 +379,8 @@
         method: "GET",
         headers: {
           "Authorization": "Bearer " + token,
-          "Accept": ACCEPT_HEADER
+          "Accept": ACCEPT_HEADER,
+          "Prefer": "return=representation"
         }
       });
     } catch (networkErr) {
