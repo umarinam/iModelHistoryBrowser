@@ -1186,9 +1186,15 @@
         setStatus(compareJobStatusEl, "Comparison complete — fetching results…", "loading");
         const href = job.comparison && job.comparison.href;
         if (!href) throw new Error("Comparison completed but no result link was returned.");
-        const blobResp = await fetch(href, {
-          headers: { "Authorization": "Bearer " + getToken(), "Accept": ACCEPT_HEADER }
-        });
+        // The result href is usually a SAS-signed Azure Blob Storage URL (auth is
+        // baked into its query string, e.g. "sig="/"sp="/"sr=") -- sending our own
+        // Authorization header on top of that makes Azure reject the request with
+        // "Authentication information is not given in the correct format". Only
+        // attach our bearer token if the link actually points back at the API.
+        const blobHeaders = href.indexOf(API_BASE) === 0
+          ? { "Authorization": "Bearer " + getToken(), "Accept": ACCEPT_HEADER }
+          : {};
+        const blobResp = await fetch(href, { headers: blobHeaders });
         if (!blobResp.ok) throw new Error("HTTP " + blobResp.status + " fetching comparison results.");
         const blob = await blobResp.json();
         const rows = changedElementsToRows(blob);
