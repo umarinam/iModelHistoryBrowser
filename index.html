@@ -9,6 +9,7 @@
     --bg: #0f1115;
     --panel: #171a21;
     --panel-2: #1e222b;
+    --panel-3: #23283350;
     --border: #2a2f3a;
     --text: #e6e9ef;
     --text-dim: #9aa3b2;
@@ -44,6 +45,8 @@
     color: var(--text-dim);
     margin: 0 0 12px;
     font-weight: 600;
+    display: flex;
+    align-items: center;
   }
   label {
     display: block;
@@ -51,7 +54,7 @@
     color: var(--text-dim);
     margin-bottom: 6px;
   }
-  input[type=text], input[type=password], textarea {
+  input[type=text], input[type=password], input[type=search], textarea {
     width: 100%;
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -102,34 +105,13 @@
   .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
   .checkbox-row input { width: auto; }
   .checkbox-row label { margin: 0; color: var(--text-dim); font-size: 12px; }
-  .grid3 {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 16px;
-  }
-  @media (max-width: 900px) { .grid3 { grid-template-columns: 1fr; } }
-  .col-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .col-head .count { font-size: 11px; color: var(--text-dim); }
   .status { font-size: 12px; margin-top: 8px; min-height: 16px; }
   .status.ok { color: var(--ok); }
   .status.err { color: var(--err); white-space: pre-wrap; }
   .status.loading { color: var(--warn); }
   .hidden { display: none !important; }
-  .imodel-meta {
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-top: 8px;
-  }
-  .details-empty {
-    color: var(--text-dim);
-    font-size: 13px;
-    font-style: italic;
-  }
+  .imodel-meta { font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+  .details-empty { color: var(--text-dim); font-size: 13px; font-style: italic; }
   .kv-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 14px; }
   .kv-table tr { border-bottom: 1px solid var(--border); }
   .kv-table tr:last-child { border-bottom: none; }
@@ -146,12 +128,7 @@
     max-height: 400px;
     margin: 0;
   }
-  details summary {
-    cursor: pointer;
-    color: var(--text-dim);
-    font-size: 12px;
-    margin-bottom: 8px;
-  }
+  details summary { cursor: pointer; color: var(--text-dim); font-size: 12px; margin-bottom: 8px; }
   .step-badge {
     display: inline-flex;
     align-items: center;
@@ -163,8 +140,73 @@
     font-size: 11px;
     font-weight: 700;
     margin-right: 8px;
+    flex: none;
   }
-  .card h2 { display: flex; align-items: center; }
+
+  /* ---- independent data sections ---- */
+  .section-card { padding-bottom: 18px; }
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .section-header h2 { margin: 0; }
+  .section-header .count { font-size: 11px; color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
+  .section-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .section-controls input[type=search] { max-width: 320px; }
+  .table-wrap {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: auto;
+    max-height: 340px;
+    background: var(--panel-2);
+  }
+  table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  table.data-table thead th {
+    position: sticky;
+    top: 0;
+    background: #1c202a;
+    text-align: left;
+    padding: 8px 10px;
+    color: var(--text-dim);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  table.data-table thead th:hover { color: var(--text); }
+  table.data-table thead th .arrow { font-size: 10px; margin-left: 3px; color: var(--accent); }
+  table.data-table tbody td {
+    padding: 7px 10px;
+    border-bottom: 1px solid var(--border);
+    font-family: var(--mono);
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  table.data-table tbody tr { cursor: pointer; }
+  table.data-table tbody tr:hover { background: #22273299; }
+  table.data-table tbody tr.selected { background: #1d3a5c99; }
+  table.data-table tbody tr:last-child td { border-bottom: none; }
+  .table-empty-row td { color: var(--text-dim); font-style: italic; font-family: var(--sans); cursor: default; }
+  .section-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; flex-wrap: wrap; }
+  .details-panel {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed var(--border);
+  }
+  .details-panel h3 { margin: 0 0 10px; font-size: 14px; }
 </style>
 </head>
 <body>
@@ -205,45 +247,74 @@
     </div>
     <button id="loadMoreIModelsBtn" class="secondary hidden">Load more iModels</button>
   </div>
-  <div id="iModelMeta" class="imodel-meta"></div>
+  <div id="iModelMeta"></div>
 </div>
 
-<div class="card hidden" id="listsCard">
-  <h2><span class="step-badge">4</span>Changesets, Changeset Groups &amp; Briefcases</h2>
-  <div class="grid3">
-    <div>
-      <div class="col-head">
-        <label style="margin:0">Changesets</label>
-        <span class="count" id="changesetsCount"></span>
-      </div>
-      <select id="changesetsSelect"><option value="">-- select --</option></select>
-      <div id="changesetsStatus" class="status"></div>
-      <button id="loadMoreChangesetsBtn" class="secondary hidden" style="margin-top:6px;">Load more</button>
-    </div>
-    <div>
-      <div class="col-head">
-        <label style="margin:0">Changeset Groups</label>
-        <span class="count" id="groupsCount"></span>
-      </div>
-      <select id="groupsSelect"><option value="">-- select --</option></select>
-      <div id="groupsStatus" class="status"></div>
-      <button id="loadMoreGroupsBtn" class="secondary hidden" style="margin-top:6px;">Load more</button>
-    </div>
-    <div>
-      <div class="col-head">
-        <label style="margin:0">Briefcases</label>
-        <span class="count" id="briefcasesCount"></span>
-      </div>
-      <select id="briefcasesSelect"><option value="">-- select --</option></select>
-      <div id="briefcasesStatus" class="status"></div>
-      <button id="loadMoreBriefcasesBtn" class="secondary hidden" style="margin-top:6px;">Load more</button>
-    </div>
+<!-- Each of the three sections below is self-contained: its own table, its own
+     search/sort/pagination, and its own details panel. All three read from the
+     same selected iModel but do not otherwise affect one another. -->
+
+<div class="card section-card hidden" id="changesetsSection">
+  <div class="section-header">
+    <h2><span class="step-badge">4</span>Changesets</h2>
+    <span class="count" id="changesetsCount"></span>
   </div>
+  <div class="section-controls">
+    <input type="search" id="changesetsFilter" placeholder="Filter by index, name, state, description...">
+    <div id="changesetsStatus" class="status" style="margin:0"></div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="changesetsTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="section-footer">
+    <button id="loadMoreChangesetsBtn" class="secondary hidden">Load more changesets</button>
+  </div>
+  <div class="details-panel" id="changesetsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
 </div>
 
-<div class="card hidden" id="detailsCard">
-  <h2>Details</h2>
-  <div id="detailsBody"><p class="details-empty">Select an iModel, changeset, changeset group or briefcase above to see its details here.</p></div>
+<div class="card section-card hidden" id="groupsSection">
+  <div class="section-header">
+    <h2><span class="step-badge">5</span>Changeset Groups</h2>
+    <span class="count" id="groupsCount"></span>
+  </div>
+  <div class="section-controls">
+    <input type="search" id="groupsFilter" placeholder="Filter by id, state, description...">
+    <div id="groupsStatus" class="status" style="margin:0"></div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="groupsTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="section-footer">
+    <button id="loadMoreGroupsBtn" class="secondary hidden">Load more groups</button>
+  </div>
+  <div class="details-panel" id="groupsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
+</div>
+
+<div class="card section-card hidden" id="briefcasesSection">
+  <div class="section-header">
+    <h2><span class="step-badge">6</span>Briefcases</h2>
+    <span class="count" id="briefcasesCount"></span>
+  </div>
+  <div class="section-controls">
+    <input type="search" id="briefcasesFilter" placeholder="Filter by id, name, device, owner...">
+    <div id="briefcasesStatus" class="status" style="margin:0"></div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table" id="briefcasesTable">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <div class="section-footer">
+    <button id="loadMoreBriefcasesBtn" class="secondary hidden">Load more briefcases</button>
+  </div>
+  <div class="details-panel" id="briefcasesDetails"><p class="details-empty">Select a row above to see its details.</p></div>
 </div>
 
 <script>
@@ -266,39 +337,6 @@
   const iModelSelect = el("iModelSelect");
   const loadMoreIModelsBtn = el("loadMoreIModelsBtn");
   const iModelMeta = el("iModelMeta");
-
-  const listsCard = el("listsCard");
-  const detailsCard = el("detailsCard");
-  const detailsBody = el("detailsBody");
-
-  const changesetsSelect = el("changesetsSelect");
-  const groupsSelect = el("groupsSelect");
-  const briefcasesSelect = el("briefcasesSelect");
-
-  const changesetsStatus = el("changesetsStatus");
-  const groupsStatus = el("groupsStatus");
-  const briefcasesStatus = el("briefcasesStatus");
-
-  const changesetsCount = el("changesetsCount");
-  const groupsCount = el("groupsCount");
-  const briefcasesCount = el("briefcasesCount");
-
-  const loadMoreChangesetsBtn = el("loadMoreChangesetsBtn");
-  const loadMoreGroupsBtn = el("loadMoreGroupsBtn");
-  const loadMoreBriefcasesBtn = el("loadMoreBriefcasesBtn");
-
-  // ---- state ----
-  let iModelsNextUrl = null;
-  let iModelsById = {};
-
-  let currentIModelId = null;
-  let changesetsNextUrl = null;
-  let groupsNextUrl = null;
-  let briefcasesNextUrl = null;
-
-  let changesetsById = {};
-  let groupsById = {};
-  let briefcasesById = {};
 
   // ---- token persistence (opt-in, sessionStorage only) ----
   try {
@@ -384,20 +422,267 @@
     }[c]));
   }
 
-  function renderDetails(title, fields, rawObj) {
-    detailsCard.classList.remove("hidden");
-    let html = "<h3 style='margin:0 0 10px;font-size:15px;'>" + escapeHtml(title) + "</h3>";
+  function renderKvDetails(container, title, fields, rawObj) {
+    let html = "<h3>" + escapeHtml(title) + "</h3>";
     html += "<table class='kv-table'>";
     for (const [k, v] of fields) {
       html += "<tr><td class='k'>" + escapeHtml(k) + "</td><td class='v'>" + escapeHtml(v === null || v === undefined || v === "" ? "—" : v) + "</td></tr>";
     }
     html += "</table>";
     html += "<details><summary>Raw JSON</summary><pre class='json'>" + escapeHtml(JSON.stringify(rawObj, null, 2)) + "</pre></details>";
-    detailsBody.innerHTML = html;
-    detailsCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    container.innerHTML = html;
   }
 
+  // =========================================================================
+  // Generic independent data section: owns its own fetch/pagination, filter,
+  // sort, table render and details panel. Three instances (changesets, groups,
+  // briefcases) each operate without touching the others.
+  // =========================================================================
+
+  function createDataSection(opts) {
+    // opts: { sectionId, tableId, statusId, countId, filterId, loadMoreBtnId,
+    //         detailsId, responseKey, endpoint(iModelId), columns, filterMatch,
+    //         detailTitle, detailFields, emptyMessage, defaultSort }
+    const sectionEl = el(opts.sectionId);
+    const tableEl = el(opts.tableId);
+    const theadEl = tableEl.querySelector("thead");
+    const tbodyEl = tableEl.querySelector("tbody");
+    const statusEl = el(opts.statusId);
+    const countEl = el(opts.countId);
+    const filterEl = el(opts.filterId);
+    const loadMoreBtn = el(opts.loadMoreBtnId);
+    const detailsEl = el(opts.detailsId);
+
+    let items = [];
+    let byId = {};
+    let nextUrl = null;
+    let iModelId = null;
+    let selectedId = null;
+    let filterText = "";
+    let sort = { key: opts.defaultSort.key, dir: opts.defaultSort.dir };
+
+    // build header row once
+    theadEl.innerHTML = "<tr>" + opts.columns.map((c) =>
+      "<th data-key='" + c.key + "'>" + escapeHtml(c.label) + "</th>"
+    ).join("") + "</tr>";
+
+    theadEl.querySelectorAll("th").forEach((th) => {
+      th.addEventListener("click", () => {
+        const key = th.getAttribute("data-key");
+        if (sort.key === key) sort.dir = sort.dir === "asc" ? "desc" : "asc";
+        else { sort.key = key; sort.dir = "asc"; }
+        render();
+      });
+    });
+
+    filterEl.addEventListener("input", () => {
+      filterText = filterEl.value.trim().toLowerCase();
+      render();
+    });
+
+    function reset(newIModelId) {
+      iModelId = newIModelId;
+      items = [];
+      byId = {};
+      nextUrl = null;
+      selectedId = null;
+      filterText = "";
+      filterEl.value = "";
+      sectionEl.classList.remove("hidden");
+      setStatus(statusEl, "", "");
+      countEl.textContent = "";
+      loadMoreBtn.classList.add("hidden");
+      detailsEl.innerHTML = "<p class='details-empty'>" + escapeHtml(opts.emptyMessage || "Select a row above to see its details.") + "</p>";
+      render();
+    }
+
+    async function load() {
+      if (!iModelId) return;
+      const url = nextUrl || (API_BASE + opts.endpoint(iModelId) + (opts.endpoint(iModelId).indexOf("?") >= 0 ? "&" : "?") + "$top=" + PAGE_SIZE);
+      setStatus(statusEl, "Loading…", "loading");
+      loadMoreBtn.disabled = true;
+      try {
+        const data = await apiGet(url);
+        const newItems = (data && data[opts.responseKey]) || [];
+        newItems.forEach((it) => {
+          if (!byId[it.id]) items.push(it);
+          byId[it.id] = it;
+        });
+        nextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
+        loadMoreBtn.classList.toggle("hidden", !nextUrl);
+        countEl.textContent = items.length ? items.length + " loaded" : "";
+        setStatus(statusEl, items.length ? "" : "None found.", items.length ? "" : "ok");
+        render();
+      } catch (err) {
+        setStatus(statusEl, err.message, "err");
+      } finally {
+        loadMoreBtn.disabled = false;
+      }
+    }
+
+    function getFiltered() {
+      let out = items;
+      if (filterText) {
+        out = out.filter((it) => opts.filterMatch(it, filterText));
+      }
+      out = out.slice().sort((a, b) => {
+        let av = a[sort.key], bv = b[sort.key];
+        if (av === undefined || av === null) av = "";
+        if (bv === undefined || bv === null) bv = "";
+        let cmp;
+        if (typeof av === "number" && typeof bv === "number") cmp = av - bv;
+        else cmp = String(av).localeCompare(String(bv));
+        return sort.dir === "asc" ? cmp : -cmp;
+      });
+      return out;
+    }
+
+    function render() {
+      theadEl.querySelectorAll("th").forEach((th) => {
+        th.innerHTML = escapeHtml(opts.columns.find((c) => c.key === th.getAttribute("data-key")).label);
+        if (th.getAttribute("data-key") === sort.key) {
+          th.innerHTML += "<span class='arrow'>" + (sort.dir === "asc" ? "▲" : "▼") + "</span>";
+        }
+      });
+
+      const rows = getFiltered();
+      if (rows.length === 0) {
+        tbodyEl.innerHTML = "<tr class='table-empty-row'><td colspan='" + opts.columns.length + "'>" +
+          (items.length === 0 ? "No data loaded yet." : "No rows match your filter.") + "</td></tr>";
+        return;
+      }
+      tbodyEl.innerHTML = rows.map((it) => {
+        const cells = opts.columns.map((c) => "<td>" + escapeHtml(c.format ? c.format(it) : (it[c.key] === undefined || it[c.key] === null ? "—" : it[c.key])) + "</td>").join("");
+        return "<tr data-id='" + escapeHtml(it.id) + "' class='" + (it.id === selectedId ? "selected" : "") + "'>" + cells + "</tr>";
+      }).join("");
+
+      tbodyEl.querySelectorAll("tr[data-id]").forEach((tr) => {
+        tr.addEventListener("click", () => {
+          selectedId = tr.getAttribute("data-id");
+          render();
+          const item = byId[selectedId];
+          renderKvDetails(detailsEl, opts.detailTitle(item), opts.detailFields(item), item);
+        });
+      });
+    }
+
+    loadMoreBtn.addEventListener("click", load);
+
+    return { reset, load };
+  }
+
+  const changesetsSection = createDataSection({
+    sectionId: "changesetsSection",
+    tableId: "changesetsTable",
+    statusId: "changesetsStatus",
+    countId: "changesetsCount",
+    filterId: "changesetsFilter",
+    loadMoreBtnId: "loadMoreChangesetsBtn",
+    detailsId: "changesetsDetails",
+    responseKey: "changesets",
+    endpoint: (id) => "/imodels/" + id + "/changesets",
+    defaultSort: { key: "index", dir: "desc" },
+    columns: [
+      { key: "index", label: "Index" },
+      { key: "displayName", label: "Name" },
+      { key: "state", label: "State" },
+      { key: "containingChanges", label: "Changes" },
+      { key: "pushDateTime", label: "Pushed", format: (it) => fmtDate(it.pushDateTime) }
+    ],
+    filterMatch: (it, f) =>
+      String(it.index).includes(f) ||
+      (it.displayName || "").toLowerCase().includes(f) ||
+      (it.description || "").toLowerCase().includes(f) ||
+      (it.state || "").toLowerCase().includes(f),
+    detailTitle: (cs) => "Changeset — " + (cs.displayName || cs.id),
+    detailFields: (cs) => [
+      ["ID", cs.id],
+      ["Index", cs.index],
+      ["Display name", cs.displayName],
+      ["Description", cs.description],
+      ["State", cs.state],
+      ["Containing changes", cs.containingChanges],
+      ["Parent ID", cs.parentId],
+      ["Group ID", cs.groupId],
+      ["Briefcase ID", cs.briefcaseId],
+      ["Creator ID", cs.creatorId],
+      ["Pushed", fmtDate(cs.pushDateTime)],
+      ["File size (bytes)", cs.fileSize]
+    ]
+  });
+
+  const groupsSection = createDataSection({
+    sectionId: "groupsSection",
+    tableId: "groupsTable",
+    statusId: "groupsStatus",
+    countId: "groupsCount",
+    filterId: "groupsFilter",
+    loadMoreBtnId: "loadMoreGroupsBtn",
+    detailsId: "groupsDetails",
+    responseKey: "changesetGroups",
+    endpoint: (id) => "/imodels/" + id + "/changesetgroups",
+    defaultSort: { key: "createdDateTime", dir: "desc" },
+    columns: [
+      { key: "id", label: "ID", format: (it) => it.id.slice(0, 8) + "…" },
+      { key: "state", label: "State" },
+      { key: "description", label: "Description" },
+      { key: "creatorId", label: "Creator", format: (it) => (it.creatorId || "").slice(0, 8) + (it.creatorId ? "…" : "—") },
+      { key: "createdDateTime", label: "Created", format: (it) => fmtDate(it.createdDateTime) }
+    ],
+    filterMatch: (it, f) =>
+      (it.id || "").toLowerCase().includes(f) ||
+      (it.state || "").toLowerCase().includes(f) ||
+      (it.description || "").toLowerCase().includes(f),
+    detailTitle: (g) => "Changeset Group — " + g.id,
+    detailFields: (g) => [
+      ["ID", g.id],
+      ["State", g.state],
+      ["Description", g.description],
+      ["Creator ID", g.creatorId],
+      ["Created", fmtDate(g.createdDateTime)]
+    ]
+  });
+
+  const briefcasesSection = createDataSection({
+    sectionId: "briefcasesSection",
+    tableId: "briefcasesTable",
+    statusId: "briefcasesStatus",
+    countId: "briefcasesCount",
+    filterId: "briefcasesFilter",
+    loadMoreBtnId: "loadMoreBriefcasesBtn",
+    detailsId: "briefcasesDetails",
+    responseKey: "briefcases",
+    endpoint: (id) => "/imodels/" + id + "/briefcases",
+    defaultSort: { key: "briefcaseId", dir: "asc" },
+    columns: [
+      { key: "briefcaseId", label: "Briefcase ID" },
+      { key: "displayName", label: "Name" },
+      { key: "deviceName", label: "Device" },
+      { key: "ownerId", label: "Owner", format: (it) => (it.ownerId || "").slice(0, 8) + (it.ownerId ? "…" : "—") },
+      { key: "acquiredDateTime", label: "Acquired", format: (it) => fmtDate(it.acquiredDateTime) }
+    ],
+    filterMatch: (it, f) =>
+      String(it.briefcaseId).includes(f) ||
+      (it.displayName || "").toLowerCase().includes(f) ||
+      (it.deviceName || "").toLowerCase().includes(f) ||
+      (it.ownerId || "").toLowerCase().includes(f),
+    detailTitle: (b) => "Briefcase — #" + b.briefcaseId,
+    detailFields: (b) => [
+      ["ID", b.id],
+      ["Briefcase ID", b.briefcaseId],
+      ["Display name", b.displayName],
+      ["Device name", b.deviceName],
+      ["Owner ID", b.ownerId],
+      ["Acquired", fmtDate(b.acquiredDateTime)],
+      ["File size (bytes)", b.fileSize],
+      ["Application", b.application ? (b.application.name || b.application.id) : null]
+    ]
+  });
+
   // ---------------- iModels ----------------
+
+  let iModelsNextUrl = null;
+  let iModelsById = {};
 
   async function loadIModels(reset) {
     const projectId = projectIdInput.value.trim();
@@ -410,8 +695,13 @@
       iModelsNextUrl = null;
       clearSelect(iModelSelect, "-- select an iModel --");
       iModelSelectCard.classList.add("hidden");
-      listsCard.classList.add("hidden");
-      detailsCard.classList.add("hidden");
+      changesetsSection.reset(null);
+      groupsSection.reset(null);
+      briefcasesSection.reset(null);
+      el("changesetsSection").classList.add("hidden");
+      el("groupsSection").classList.add("hidden");
+      el("briefcasesSection").classList.add("hidden");
+      iModelMeta.innerHTML = "";
     }
 
     const url = iModelsNextUrl || (API_BASE + "/imodels/?iTwinId=" + encodeURIComponent(projectId) + "&$top=" + PAGE_SIZE);
@@ -454,29 +744,20 @@
   iModelSelect.addEventListener("change", async () => {
     const id = iModelSelect.value;
     if (!id) return;
-    currentIModelId = id;
-    listsCard.classList.remove("hidden");
 
-    changesetsById = {}; groupsById = {}; briefcasesById = {};
-    changesetsNextUrl = null; groupsNextUrl = null; briefcasesNextUrl = null;
-    clearSelect(changesetsSelect, "-- select --");
-    clearSelect(groupsSelect, "-- select --");
-    clearSelect(briefcasesSelect, "-- select --");
-    changesetsCount.textContent = "";
-    groupsCount.textContent = "";
-    briefcasesCount.textContent = "";
-    loadMoreChangesetsBtn.classList.add("hidden");
-    loadMoreGroupsBtn.classList.add("hidden");
-    loadMoreBriefcasesBtn.classList.add("hidden");
-
-    // Show basic info immediately, then fetch full details.
     const basic = iModelsById[id] || {};
-    iModelMeta.textContent = basic.displayName ? "Selected: " + basic.displayName : "";
+    iModelMeta.innerHTML = basic.displayName ? "<div class='imodel-meta'>Selected: " + escapeHtml(basic.displayName) + "</div>" : "";
+
+    // Each section owns its own state — selecting a new iModel just re-seeds
+    // all three independently; they don't share data or selection with each other.
+    changesetsSection.reset(id);
+    groupsSection.reset(id);
+    briefcasesSection.reset(id);
 
     fetchIModelDetails(id);
-    loadChangesets(true);
-    loadGroups(true);
-    loadBriefcases(true);
+    changesetsSection.load();
+    groupsSection.load();
+    briefcasesSection.load();
   });
 
   async function fetchIModelDetails(id) {
@@ -484,7 +765,8 @@
       const data = await apiGet(API_BASE + "/imodels/" + id);
       const im = data && data.iModel;
       if (!im) return;
-      renderDetails("iModel — " + (im.displayName || im.id), [
+      const container = document.createElement("div");
+      renderKvDetails(container, im.displayName || im.id, [
         ["ID", im.id],
         ["Display name", im.displayName],
         ["Name", im.name],
@@ -497,162 +779,12 @@
         ["Secured", im.isSecured],
         ["Containers enabled", im.containersEnabled]
       ], im);
+      iModelMeta.innerHTML = "";
+      iModelMeta.appendChild(container);
     } catch (err) {
-      // Non-fatal — the row-level metadata from the list call still fills the dropdown.
+      // Non-fatal — the basic row from the list call is still shown.
     }
   }
-
-  // ---------------- Changesets ----------------
-
-  async function loadChangesets(reset) {
-    if (!currentIModelId) return;
-    if (reset) {
-      changesetsById = {};
-      changesetsNextUrl = null;
-      clearSelect(changesetsSelect, "-- select --");
-    }
-    const url = changesetsNextUrl || (API_BASE + "/imodels/" + currentIModelId + "/changesets?$top=" + PAGE_SIZE);
-    setStatus(changesetsStatus, "Loading…", "loading");
-    try {
-      const data = await apiGet(url);
-      const items = (data && data.changesets) || [];
-      items.forEach((cs) => {
-        changesetsById[cs.id] = cs;
-        const opt = document.createElement("option");
-        opt.value = cs.id;
-        const label = (cs.index != null ? "#" + cs.index + " " : "") + (cs.displayName || cs.id);
-        opt.textContent = label;
-        changesetsSelect.appendChild(opt);
-      });
-      changesetsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
-      loadMoreChangesetsBtn.classList.toggle("hidden", !changesetsNextUrl);
-      const total = Object.keys(changesetsById).length;
-      changesetsCount.textContent = total ? total + " loaded" : "";
-      setStatus(changesetsStatus, total ? "" : "No changesets found.", total ? "" : "ok");
-    } catch (err) {
-      setStatus(changesetsStatus, err.message, "err");
-    }
-  }
-
-  loadMoreChangesetsBtn.addEventListener("click", () => loadChangesets(false));
-
-  changesetsSelect.addEventListener("change", () => {
-    const id = changesetsSelect.value;
-    if (!id) return;
-    const cs = changesetsById[id];
-    if (!cs) return;
-    renderDetails("Changeset — " + (cs.displayName || cs.id), [
-      ["ID", cs.id],
-      ["Index", cs.index],
-      ["Display name", cs.displayName],
-      ["Description", cs.description],
-      ["State", cs.state],
-      ["Containing changes", cs.containingChanges],
-      ["Parent ID", cs.parentId],
-      ["Group ID", cs.groupId],
-      ["Briefcase ID", cs.briefcaseId],
-      ["Creator ID", cs.creatorId],
-      ["Pushed", fmtDate(cs.pushDateTime)],
-      ["File size (bytes)", cs.fileSize]
-    ], cs);
-  });
-
-  // ---------------- Changeset Groups ----------------
-
-  async function loadGroups(reset) {
-    if (!currentIModelId) return;
-    if (reset) {
-      groupsById = {};
-      groupsNextUrl = null;
-      clearSelect(groupsSelect, "-- select --");
-    }
-    const url = groupsNextUrl || (API_BASE + "/imodels/" + currentIModelId + "/changesetgroups?$top=" + PAGE_SIZE);
-    setStatus(groupsStatus, "Loading…", "loading");
-    try {
-      const data = await apiGet(url);
-      const items = (data && data.changesetGroups) || [];
-      items.forEach((g) => {
-        groupsById[g.id] = g;
-        const opt = document.createElement("option");
-        opt.value = g.id;
-        opt.textContent = (g.description ? g.description + " — " : "") + g.id;
-        groupsSelect.appendChild(opt);
-      });
-      groupsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
-      loadMoreGroupsBtn.classList.toggle("hidden", !groupsNextUrl);
-      const total = Object.keys(groupsById).length;
-      groupsCount.textContent = total ? total + " loaded" : "";
-      setStatus(groupsStatus, total ? "" : "No changeset groups found.", total ? "" : "ok");
-    } catch (err) {
-      setStatus(groupsStatus, err.message, "err");
-    }
-  }
-
-  loadMoreGroupsBtn.addEventListener("click", () => loadGroups(false));
-
-  groupsSelect.addEventListener("change", () => {
-    const id = groupsSelect.value;
-    if (!id) return;
-    const g = groupsById[id];
-    if (!g) return;
-    renderDetails("Changeset Group — " + g.id, [
-      ["ID", g.id],
-      ["State", g.state],
-      ["Description", g.description],
-      ["Creator ID", g.creatorId],
-      ["Created", fmtDate(g.createdDateTime)]
-    ], g);
-  });
-
-  // ---------------- Briefcases ----------------
-
-  async function loadBriefcases(reset) {
-    if (!currentIModelId) return;
-    if (reset) {
-      briefcasesById = {};
-      briefcasesNextUrl = null;
-      clearSelect(briefcasesSelect, "-- select --");
-    }
-    const url = briefcasesNextUrl || (API_BASE + "/imodels/" + currentIModelId + "/briefcases?$top=" + PAGE_SIZE);
-    setStatus(briefcasesStatus, "Loading…", "loading");
-    try {
-      const data = await apiGet(url);
-      const items = (data && data.briefcases) || [];
-      items.forEach((b) => {
-        briefcasesById[b.id] = b;
-        const opt = document.createElement("option");
-        opt.value = b.id;
-        opt.textContent = "#" + b.briefcaseId + " — " + (b.displayName || b.deviceName || b.id);
-        briefcasesSelect.appendChild(opt);
-      });
-      briefcasesNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
-      loadMoreBriefcasesBtn.classList.toggle("hidden", !briefcasesNextUrl);
-      const total = Object.keys(briefcasesById).length;
-      briefcasesCount.textContent = total ? total + " loaded" : "";
-      setStatus(briefcasesStatus, total ? "" : "No briefcases found.", total ? "" : "ok");
-    } catch (err) {
-      setStatus(briefcasesStatus, err.message, "err");
-    }
-  }
-
-  loadMoreBriefcasesBtn.addEventListener("click", () => loadBriefcases(false));
-
-  briefcasesSelect.addEventListener("change", () => {
-    const id = briefcasesSelect.value;
-    if (!id) return;
-    const b = briefcasesById[id];
-    if (!b) return;
-    renderDetails("Briefcase — #" + b.briefcaseId, [
-      ["ID", b.id],
-      ["Briefcase ID", b.briefcaseId],
-      ["Display name", b.displayName],
-      ["Device name", b.deviceName],
-      ["Owner ID", b.ownerId],
-      ["Acquired", fmtDate(b.acquiredDateTime)],
-      ["File size (bytes)", b.fileSize],
-      ["Application", b.application ? (b.application.name || b.application.id) : null]
-    ], b);
-  });
 
 })();
 </script>
