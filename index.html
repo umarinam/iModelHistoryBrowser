@@ -105,6 +105,13 @@
   .checkbox-row { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
   .checkbox-row input { width: auto; }
   .checkbox-row label { margin: 0; color: var(--text-dim); font-size: 12px; }
+  .warning-note {
+    font-size: 11.5px;
+    color: var(--warn);
+    margin: 8px 0 0;
+    line-height: 1.5;
+    padding-left: 24px;
+  }
   .status { font-size: 12px; margin-top: 8px; min-height: 16px; }
   .status.ok { color: var(--ok); }
   .status.err { color: var(--err); white-space: pre-wrap; }
@@ -232,9 +239,10 @@
     <textarea id="tokenInput" placeholder="eyJhbGciOi... (paste with or without the 'Bearer ' prefix)"></textarea>
   </div>
   <div class="checkbox-row">
-    <input type="checkbox" id="rememberToken">
-    <label for="rememberToken">Keep token in this browser tab only (sessionStorage) — cleared when the tab closes</label>
+    <input type="checkbox" id="rememberMe">
+    <label for="rememberMe">Remember my access token &amp; iTwin ID on this device (localStorage) — persists after closing the browser</label>
   </div>
+  <p class="warning-note">⚠ Security risk: enabling this stores your access token in plain text in this browser's local storage. It will stay there until you clear it, and anything with script access to this page (a browser extension, an XSS bug, another user of a shared device) could read it. Only enable this on a personal, trusted device.</p>
 </div>
 
 <div class="card">
@@ -242,7 +250,8 @@
   <div class="row">
     <div class="field">
       <label for="projectIdInput">iTwin / Project ID (GUID)</label>
-      <input type="text" id="projectIdInput" placeholder="e.g. ad0ba809-9241-48ad-9eb0-c8038c1a1d51">
+      <input type="text" id="projectIdInput" list="projectIdHistory" autocomplete="off" placeholder="e.g. ad0ba809-9241-48ad-9eb0-c8038c1a1d51">
+      <datalist id="projectIdHistory"></datalist>
     </div>
     <button id="loadIModelsBtn">Load iModels</button>
   </div>
@@ -354,8 +363,9 @@
   const el = (id) => document.getElementById(id);
 
   const tokenInput = el("tokenInput");
-  const rememberToken = el("rememberToken");
+  const rememberMe = el("rememberMe");
   const projectIdInput = el("projectIdInput");
+  const projectIdHistoryEl = el("projectIdHistory");
   const loadIModelsBtn = el("loadIModelsBtn");
   const iModelsStatus = el("iModelsStatus");
 
@@ -364,26 +374,77 @@
   const loadMoreIModelsBtn = el("loadMoreIModelsBtn");
   const iModelMeta = el("iModelMeta");
 
-  // ---- token persistence (opt-in, sessionStorage only) ----
-  try {
-    const saved = sessionStorage.getItem("imhb_token");
-    if (saved) {
-      tokenInput.value = saved;
-      rememberToken.checked = true;
-    }
-  } catch (e) { /* sessionStorage unavailable, ignore */ }
+  // ---- "remember me" persistence (opt-in, localStorage) ----
+  // The remember-me *setting* (on/off) always survives a refresh; the token and
+  // iTwin ID values themselves are only written to/read from localStorage while
+  // the setting is on, and are wiped immediately when the user turns it off.
+  const REMEMBER_FLAG_KEY = "imhb_remember_enabled";
+  const TOKEN_KEY = "imhb_token";
+  const PROJECT_ID_KEY = "imhb_projectId";
 
-  rememberToken.addEventListener("change", () => {
+  try {
+    const enabled = localStorage.getItem(REMEMBER_FLAG_KEY) === "1";
+    rememberMe.checked = enabled;
+    if (enabled) {
+      const savedToken = localStorage.getItem(TOKEN_KEY);
+      const savedProjectId = localStorage.getItem(PROJECT_ID_KEY);
+      if (savedToken) tokenInput.value = savedToken;
+      if (savedProjectId) projectIdInput.value = savedProjectId;
+    }
+  } catch (e) { /* localStorage unavailable, ignore */ }
+
+  function persistRememberedValues() {
+    if (!rememberMe.checked) return;
     try {
-      if (rememberToken.checked) sessionStorage.setItem("imhb_token", tokenInput.value);
-      else sessionStorage.removeItem("imhb_token");
+      localStorage.setItem(TOKEN_KEY, tokenInput.value);
+      localStorage.setItem(PROJECT_ID_KEY, projectIdInput.value);
+    } catch (e) { /* ignore */ }
+  }
+
+  rememberMe.addEventListener("change", () => {
+    try {
+      if (rememberMe.checked) {
+        localStorage.setItem(REMEMBER_FLAG_KEY, "1");
+        persistRememberedValues();
+      } else {
+        localStorage.removeItem(REMEMBER_FLAG_KEY);
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(PROJECT_ID_KEY);
+      }
     } catch (e) { /* ignore */ }
   });
-  tokenInput.addEventListener("input", () => {
-    if (rememberToken.checked) {
-      try { sessionStorage.setItem("imhb_token", tokenInput.value); } catch (e) { /* ignore */ }
-    }
-  });
+  tokenInput.addEventListener("input", persistRememberedValues);
+  projectIdInput.addEventListener("input", persistRememberedValues);
+
+  // ---- iTwin ID history (always on, independent of "remember me") ----
+  // A project/iTwin ID isn't a secret the way an access token is, so we keep a
+  // small autocomplete history of previously used values regardless of the
+  // remember-me setting above, surfaced via the input's <datalist>.
+  const ITWIN_HISTORY_KEY = "imhb_itwin_history";
+  const ITWIN_HISTORY_MAX = 15;
+
+  function loadItwinHistory() {
+    try {
+      const raw = localStorage.getItem(ITWIN_HISTORY_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) { return []; }
+  }
+
+  function renderItwinHistory(list) {
+    projectIdHistoryEl.innerHTML = list.map((id) => "<option value='" + escapeHtml(id) + "'></option>").join("");
+  }
+
+  function addItwinToHistory(id) {
+    if (!id) return;
+    const list = loadItwinHistory().filter((x) => x !== id);
+    list.unshift(id);
+    if (list.length > ITWIN_HISTORY_MAX) list.length = ITWIN_HISTORY_MAX;
+    try { localStorage.setItem(ITWIN_HISTORY_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+    renderItwinHistory(list);
+  }
+
+  renderItwinHistory(loadItwinHistory());
 
   function getToken() {
     let t = tokenInput.value.trim();
@@ -876,6 +937,8 @@
       });
       iModelsNextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
       loadMoreIModelsBtn.classList.toggle("hidden", !iModelsNextUrl);
+
+      addItwinToHistory(projectId);
 
       const total = Object.keys(iModelsById).length;
       if (total === 0) {
