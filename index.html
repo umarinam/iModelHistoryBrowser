@@ -423,15 +423,38 @@
     }[c]));
   }
 
+  function kvTableHtml(fields) {
+    return "<table class='kv-table'>" + fields.map(([k, v]) =>
+      "<tr><td class='k'>" + escapeHtml(k) + "</td><td class='v'>" + escapeHtml(v === null || v === undefined || v === "" ? "—" : v) + "</td></tr>"
+    ).join("") + "</table>";
+  }
+
   function renderKvDetails(container, title, fields, rawObj) {
     let html = "<h3>" + escapeHtml(title) + "</h3>";
-    html += "<table class='kv-table'>";
-    for (const [k, v] of fields) {
-      html += "<tr><td class='k'>" + escapeHtml(k) + "</td><td class='v'>" + escapeHtml(v === null || v === undefined || v === "" ? "—" : v) + "</td></tr>";
-    }
-    html += "</table>";
+    html += kvTableHtml(fields);
     html += "<details><summary>Raw JSON</summary><pre class='json'>" + escapeHtml(JSON.stringify(rawObj, null, 2)) + "</pre></details>";
     container.innerHTML = html;
+  }
+
+  // ---- iModel user lookup (used to enrich raw user-id fields like a briefcase owner) ----
+  const userCache = {};
+  async function fetchUser(iModelId, userId) {
+    if (!userId) return null;
+    const key = iModelId + ":" + userId;
+    if (key in userCache) return userCache[key];
+    try {
+      const data = await apiGet(API_BASE + "/imodels/" + iModelId + "/users/" + userId);
+      userCache[key] = (data && data.user) || null;
+    } catch (err) {
+      userCache[key] = null;
+    }
+    return userCache[key];
+  }
+
+  function userDisplayName(user) {
+    if (!user) return null;
+    const full = [user.givenName, user.surname].filter(Boolean).join(" ");
+    return full || user.displayName || user.email || null;
   }
 
   // =========================================================================
@@ -514,6 +537,7 @@
         countEl.textContent = items.length ? items.length + " loaded" : "";
         setStatus(statusEl, items.length ? "" : "None found.", items.length ? "" : "ok");
         render();
+        if (opts.enrichRows) opts.enrichRows(newItems, iModelId, render);
       } catch (err) {
         setStatus(statusEl, err.message, "err");
       } finally {
@@ -526,8 +550,10 @@
       if (filterText) {
         out = out.filter((it) => opts.filterMatch(it, filterText));
       }
+      const sortCol = opts.columns.find((c) => c.key === sort.key);
+      const getVal = sortCol && sortCol.sortValue ? sortCol.sortValue : (it) => it[sort.key];
       out = out.slice().sort((a, b) => {
-        let av = a[sort.key], bv = b[sort.key];
+        let av = getVal(a), bv = getVal(b);
         if (av === undefined || av === null) av = "";
         if (bv === undefined || bv === null) bv = "";
         let cmp;
@@ -559,10 +585,32 @@
 
       tbodyEl.querySelectorAll("tr[data-id]").forEach((tr) => {
         tr.addEventListener("click", () => {
-          selectedId = tr.getAttribute("data-id");
+          const clickedId = tr.getAttribute("data-id");
+          selectedId = clickedId;
           render();
-          const item = byId[selectedId];
+          const item = byId[clickedId];
           renderKvDetails(detailsEl, opts.detailTitle(item), opts.detailFields(item), item);
+
+          if (opts.enrichDetails) {
+            const holder = document.createElement("p");
+            holder.className = "details-empty";
+            holder.textContent = "Loading " + (opts.enrichLabel || "additional") + " details…";
+            detailsEl.appendChild(holder);
+            opts.enrichDetails(item, iModelId).then((fields) => {
+              if (selectedId !== clickedId) return;
+              holder.remove();
+              if (fields && fields.length) {
+                const block = document.createElement("div");
+                block.innerHTML =
+                  "<h4 style='margin:14px 0 8px;font-size:13px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.04em;'>" +
+                  escapeHtml(opts.enrichLabel || "Details") + "</h4>" + kvTableHtml(fields);
+                detailsEl.appendChild(block);
+              }
+            }).catch(() => {
+              if (selectedId !== clickedId) return;
+              holder.textContent = "Could not load " + (opts.enrichLabel || "additional") + " details.";
+            });
+          }
         });
       });
     }
@@ -659,14 +707,49 @@
       { key: "briefcaseId", label: "Briefcase ID" },
       { key: "displayName", label: "Name" },
       { key: "deviceName", label: "Device" },
-      { key: "ownerId", label: "Owner", format: (it) => (it.ownerId || "").slice(0, 8) + (it.ownerId ? "…" : "—") },
+      {
+        key: "ownerId",
+        label: "Owner",
+        format: (it) => it._ownerDisplay || ((it.ownerId || "").slice(0, 8) + (it.ownerId ? "…" : "—")),
+        sortValue: (it) => it._ownerDisplay || it.ownerId
+      },
       { key: "acquiredDateTime", label: "Acquired", format: (it) => fmtDate(it.acquiredDateTime) }
     ],
     filterMatch: (it, f) =>
       String(it.briefcaseId).includes(f) ||
       (it.displayName || "").toLowerCase().includes(f) ||
       (it.deviceName || "").toLowerCase().includes(f) ||
-      (it.ownerId || "").toLowerCase().includes(f),
+      (it.ownerId || "").toLowerCase().includes(f) ||
+      (it._ownerDisplay || "").toLowerCase().includes(f) ||
+      (it._ownerEmail || "").toLowerCase().includes(f),
+    // Prefetch each briefcase's owner in the background so the Owner column
+    // upgrades from a raw user id to a name as soon as it resolves.
+    enrichRows: (newItems, iModelId, rerender) => {
+      newItems.forEach((b) => {
+        if (!b.ownerId) return;
+        fetchUser(iModelId, b.ownerId).then((user) => {
+          if (!user) return;
+          b._ownerDisplay = userDisplayName(user);
+          b._ownerEmail = user.email;
+          rerender();
+        });
+      });
+    },
+    enrichLabel: "Owner",
+    enrichDetails: async (b, iModelId) => {
+      const user = await fetchUser(iModelId, b.ownerId);
+      if (!user) return null;
+      const stats = user.statistics || {};
+      return [
+        ["Name", userDisplayName(user)],
+        ["Email", user.email],
+        ["Pushed changesets", stats.pushedChangesetsCount],
+        ["Created named versions", stats.createdVersionsCount],
+        ["Briefcases acquired", stats.briefcasesCount],
+        ["Last access", fmtDate(stats.lastAccessTime)],
+        ["Last changeset push", fmtDate(stats.lastChangesetPushDate)]
+      ];
+    },
     detailTitle: (b) => "Briefcase — #" + b.briefcaseId,
     detailFields: (b) => [
       ["ID", b.id],
