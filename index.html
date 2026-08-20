@@ -507,6 +507,27 @@
     return d.toLocaleString();
   }
 
+  // Per the API docs, a changeset's "containingChanges" is a bitmask of change
+  // *categories* (schema/definition/spatial/etc.), not a count of individual
+  // changes -- e.g. 20 means "Spatial Data" (4) + "Views & Models" (16)
+  // combined, not "20 changes". The iModels API doesn't expose element-level
+  // change detail at all; that lives in the separate Changed Elements API.
+  const CONTAINING_CHANGE_FLAGS = [
+    { bit: 1, label: "Schema" },
+    { bit: 2, label: "Definition" },
+    { bit: 4, label: "Spatial Data" },
+    { bit: 8, label: "Sheets & Drawings" },
+    { bit: 16, label: "Views & Models" },
+    { bit: 32, label: "Global Properties" }
+  ];
+
+  function describeContainingChanges(flags) {
+    if (flags === undefined || flags === null) return "—";
+    if (flags === 0) return "Regular";
+    const labels = CONTAINING_CHANGE_FLAGS.filter((t) => (flags & t.bit) === t.bit).map((t) => t.label);
+    return (labels.length ? labels.join(", ") : "Regular") + " (" + flags + ")";
+  }
+
   function escapeHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({
       "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -797,7 +818,7 @@
       { key: "index", label: "Index" },
       { key: "displayName", label: "Name" },
       { key: "state", label: "State" },
-      { key: "containingChanges", label: "Changes" },
+      { key: "containingChanges", label: "Change Types", format: (it) => describeContainingChanges(it.containingChanges) },
       {
         key: "creatorId",
         label: "Creator",
@@ -812,7 +833,8 @@
       (it.description || "").toLowerCase().includes(f) ||
       (it.state || "").toLowerCase().includes(f) ||
       (it._userDisplay || "").toLowerCase().includes(f) ||
-      (it._userEmail || "").toLowerCase().includes(f),
+      (it._userEmail || "").toLowerCase().includes(f) ||
+      describeContainingChanges(it.containingChanges).toLowerCase().includes(f),
     ...makeUserEnrichment("creatorId", "Creator"),
     detailTitle: (cs) => "Changeset — " + (cs.displayName || cs.id),
     detailFields: (cs) => [
@@ -821,7 +843,7 @@
       ["Display name", cs.displayName],
       ["Description", cs.description],
       ["State", cs.state],
-      ["Containing changes", cs.containingChanges],
+      ["Containing changes", describeContainingChanges(cs.containingChanges)],
       ["Parent ID", cs.parentId],
       ["Group ID", cs.groupId],
       ["Briefcase ID", cs.briefcaseId],
