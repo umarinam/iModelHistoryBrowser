@@ -164,6 +164,7 @@
   .section-header h2 { margin: 0; }
   .section-header .count { font-size: 11px; color: var(--text-dim); font-weight: 400; text-transform: none; letter-spacing: 0; }
   .section-header-right { display: flex; align-items: center; gap: 10px; }
+  .count-all-btn { padding: 3px 9px; font-size: 11px; }
   .section-header .chevron {
     display: inline-block;
     color: var(--text-dim);
@@ -279,6 +280,7 @@
     <h2><span class="step-badge">4</span>Changesets</h2>
     <div class="section-header-right">
       <span class="count" id="changesetsCount"></span>
+      <span class="count" id="changesetsTotalCount"></span>
       <span class="chevron">▾</span>
     </div>
   </div>
@@ -305,6 +307,7 @@
     <h2><span class="step-badge">5</span>Changeset Groups</h2>
     <div class="section-header-right">
       <span class="count" id="groupsCount"></span>
+      <button type="button" class="secondary count-all-btn" id="groupsCountAllBtn">Count all</button>
       <span class="chevron">▾</span>
     </div>
   </div>
@@ -642,6 +645,9 @@
       render();
     });
 
+    let busy = false;
+    let complete = false;
+
     function reset(newIModelId) {
       iModelId = newIModelId;
       items = [];
@@ -650,6 +656,7 @@
       selectedId = null;
       filterText = "";
       filterEl.value = "";
+      complete = false;
       sectionEl.classList.remove("hidden");
       setStatus(statusEl, "", "");
       countEl.textContent = "";
@@ -658,8 +665,14 @@
       render();
     }
 
+    function updateCount() {
+      if (!items.length) { countEl.textContent = ""; return; }
+      countEl.textContent = items.length + (complete ? " total" : " loaded");
+    }
+
     async function load() {
-      if (!iModelId) return;
+      if (!iModelId || busy) return;
+      busy = true;
       const url = nextUrl || (API_BASE + opts.endpoint(iModelId) + (opts.endpoint(iModelId).indexOf("?") >= 0 ? "&" : "?") + "$top=" + PAGE_SIZE);
       setStatus(statusEl, "Loading…", "loading");
       loadMoreBtn.disabled = true;
@@ -671,16 +684,27 @@
           byId[it.id] = it;
         });
         nextUrl = (data && data._links && data._links.next && data._links.next.href) || null;
+        if (!nextUrl) complete = true;
         loadMoreBtn.classList.toggle("hidden", !nextUrl);
-        countEl.textContent = items.length ? items.length + " loaded" : "";
+        updateCount();
         setStatus(statusEl, items.length ? "" : "None found.", items.length ? "" : "ok");
         render();
         if (opts.enrichRows) opts.enrichRows(newItems, iModelId, render);
       } catch (err) {
         setStatus(statusEl, err.message, "err");
       } finally {
+        busy = false;
         loadMoreBtn.disabled = false;
       }
+    }
+
+    // Pages through every remaining page so the header can show an exact total
+    // instead of just how many rows have been loaded so far.
+    async function loadAll() {
+      if (!iModelId || busy) return;
+      do {
+        await load();
+      } while (nextUrl);
     }
 
     function getFiltered() {
@@ -755,7 +779,7 @@
 
     loadMoreBtn.addEventListener("click", load);
 
-    return { reset, load };
+    return { reset, load, loadAll };
   }
 
   const changesetsSection = createDataSection({
@@ -895,6 +919,42 @@
   setupCollapse("groupsSection", "groupsHeader");
   setupCollapse("briefcasesSection", "briefcasesHeader");
 
+  // The API doesn't expose a total-count field or a $count parameter (checked
+  // against the docs), so the exact total has to come from somewhere else per
+  // section:
+  //  - Changesets are indexed sequentially from 1 with no gaps, so the index
+  //    of the single most recent changeset *is* the total count -- one cheap
+  //    request ($top=1, sorted by index desc) instead of paging through all of them.
+  //  - Changeset groups have no such index, so the only way to get an exact
+  //    total is to page through everything; that's opt-in via "Count all"
+  //    since it can mean several requests for an iModel with many groups.
+  const changesetsTotalCountEl = el("changesetsTotalCount");
+
+  async function loadChangesetsTotal(iModelId) {
+    changesetsTotalCountEl.textContent = "";
+    try {
+      const url = API_BASE + "/imodels/" + iModelId + "/changesets?$top=1&$orderBy=" + encodeURIComponent("index desc");
+      const data = await apiGet(url);
+      const list = (data && data.changesets) || [];
+      if (list.length) changesetsTotalCountEl.textContent = "· " + list[0].index + " total";
+    } catch (err) {
+      // Non-fatal -- the "N loaded" count next to it still works.
+    }
+  }
+
+  const groupsCountAllBtn = el("groupsCountAllBtn");
+  groupsCountAllBtn.addEventListener("click", async (e) => {
+    e.stopPropagation();
+    groupsCountAllBtn.disabled = true;
+    groupsCountAllBtn.textContent = "Counting…";
+    try {
+      await groupsSection.loadAll();
+    } finally {
+      groupsCountAllBtn.disabled = false;
+      groupsCountAllBtn.textContent = "Count all";
+    }
+  });
+
   // ---------------- iModels ----------------
 
   let iModelsNextUrl = null;
@@ -917,6 +977,7 @@
       el("changesetsSection").classList.add("hidden");
       el("groupsSection").classList.add("hidden");
       el("briefcasesSection").classList.add("hidden");
+      el("changesetsTotalCount").textContent = "";
       iModelMeta.innerHTML = "";
     }
 
@@ -971,9 +1032,13 @@
     changesetsSection.reset(id);
     groupsSection.reset(id);
     briefcasesSection.reset(id);
+    changesetsTotalCountEl.textContent = "";
+    groupsCountAllBtn.disabled = false;
+    groupsCountAllBtn.textContent = "Count all";
 
     fetchIModelDetails(id);
     changesetsSection.load();
+    loadChangesetsTotal(id);
     groupsSection.load();
     briefcasesSection.load();
   });
