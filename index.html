@@ -223,6 +223,19 @@
   table.data-table tbody tr:last-child td { border-bottom: none; }
   .table-empty-row td { color: var(--text-dim); font-style: italic; font-family: var(--sans); cursor: default; }
   .section-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; flex-wrap: wrap; }
+  .export-buttons { display: flex; gap: 8px; margin-left: auto; }
+  .page-toolbar { display: flex; justify-content: flex-end; margin-bottom: 16px; }
+  .snapshot-banner {
+    background: #2a2410;
+    border: 1px solid #5a4a1a;
+    color: #e0c060;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12.5px;
+    margin-bottom: 16px;
+    line-height: 1.5;
+  }
+  .snapshot-banner strong { color: #f0d060; }
   .details-panel {
     margin-top: 14px;
     padding-top: 14px;
@@ -235,6 +248,12 @@
 
 <h1>iModel History Browser</h1>
 <p class="subtitle">Browse iModels, changesets, changeset groups and briefcases via the Bentley iTwin Platform iModels API v2.</p>
+
+<div class="snapshot-banner hidden" id="snapshotBanner"></div>
+
+<div class="page-toolbar">
+  <button type="button" class="secondary" id="exportPageBtn">Export whole page as HTML</button>
+</div>
 
 <div class="card">
   <h2><span class="step-badge">1</span>Access Token</h2>
@@ -301,6 +320,7 @@
     </div>
     <div class="section-footer">
       <button id="loadMoreChangesetsBtn" class="secondary hidden">Load more changesets</button>
+      <div class="export-buttons" id="changesetsExport"></div>
     </div>
     <div class="details-panel" id="changesetsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
   </div>
@@ -328,6 +348,7 @@
     </div>
     <div class="section-footer">
       <button id="loadMoreGroupsBtn" class="secondary hidden">Load more groups</button>
+      <div class="export-buttons" id="groupsExport"></div>
     </div>
     <div class="details-panel" id="groupsDetails"><p class="details-empty">Select a row above to see its details.</p></div>
   </div>
@@ -354,6 +375,7 @@
     </div>
     <div class="section-footer">
       <button id="loadMoreBriefcasesBtn" class="secondary hidden">Load more briefcases</button>
+      <div class="export-buttons" id="briefcasesExport"></div>
     </div>
     <div class="details-panel" id="briefcasesDetails"><p class="details-empty">Select a row above to see its details.</p></div>
   </div>
@@ -395,7 +417,10 @@
         <tbody></tbody>
       </table>
     </div>
-    <button id="loadMoreCompareBtn" class="secondary hidden">Load more</button>
+    <div class="section-footer">
+      <button id="loadMoreCompareBtn" class="secondary hidden">Load more</button>
+      <div class="export-buttons" id="compareExport"></div>
+    </div>
     <div class="details-panel" id="compareDetails"><p class="details-empty">Run a comparison, then select a row above to see its details.</p></div>
   </div>
 </div>
@@ -610,6 +635,29 @@
     return "<table class='kv-table'>" + fields.map(([k, v]) =>
       "<tr><td class='k'>" + escapeHtml(k) + "</td><td class='v'>" + escapeHtml(v === null || v === undefined || v === "" ? "—" : v) + "</td></tr>"
     ).join("") + "</table>";
+  }
+
+  function downloadBlob(filename, mimeType, content) {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function toCsvValue(v) {
+    if (v === null || v === undefined) v = "";
+    v = String(v);
+    if (/[",\n\r]/.test(v)) v = '"' + v.replace(/"/g, '""') + '"';
+    return v;
+  }
+
+  function todayStamp() {
+    return new Date().toISOString().slice(0, 10);
   }
 
   function renderKvDetails(container, title, fields, rawObj) {
@@ -835,6 +883,46 @@
       return out;
     }
 
+    function cellValue(it, c) {
+      return c.format ? c.format(it) : it[c.key];
+    }
+
+    // Exports exactly what's currently visible -- the filtered/sorted rows,
+    // not necessarily every row ever loaded -- so filtering first narrows
+    // the export too.
+    function exportCsv(filenamePrefix) {
+      const rows = getFiltered();
+      const lines = [opts.columns.map((c) => toCsvValue(c.label)).join(",")];
+      rows.forEach((it) => {
+        lines.push(opts.columns.map((c) => {
+          const v = cellValue(it, c);
+          return toCsvValue(v === undefined || v === null ? "" : v);
+        }).join(","));
+      });
+      downloadBlob((filenamePrefix || "export") + "-" + todayStamp() + ".csv", "text/csv;charset=utf-8", lines.join("\r\n"));
+    }
+
+    function exportHtml(filenamePrefix, title) {
+      const rows = getFiltered();
+      const heading = title || filenamePrefix || "Export";
+      let html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" + escapeHtml(heading) + "</title>";
+      html += "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#0f1115;color:#e6e9ef;padding:24px;}" +
+        "table{border-collapse:collapse;width:100%;font-size:13px;}th,td{border:1px solid #2a2f3a;padding:6px 10px;text-align:left;white-space:nowrap;}" +
+        "th{background:#1c202a;}tr:nth-child(even){background:#171a21;}h1{font-size:18px;}p{color:#9aa3b2;font-size:12px;}</style>";
+      html += "</head><body>";
+      html += "<h1>" + escapeHtml(heading) + "</h1>";
+      html += "<p>Exported " + escapeHtml(new Date().toLocaleString()) + " — " + rows.length + " row" + (rows.length === 1 ? "" : "s") + "</p>";
+      html += "<table><thead><tr>" + opts.columns.map((c) => "<th>" + escapeHtml(c.label) + "</th>").join("") + "</tr></thead><tbody>";
+      rows.forEach((it) => {
+        html += "<tr>" + opts.columns.map((c) => {
+          const v = cellValue(it, c);
+          return "<td>" + escapeHtml(v === undefined || v === null || v === "" ? "—" : v) + "</td>";
+        }).join("") + "</tr>";
+      });
+      html += "</tbody></table></body></html>";
+      downloadBlob((filenamePrefix || "export") + "-" + todayStamp() + ".html", "text/html;charset=utf-8", html);
+    }
+
     function render() {
       theadEl.querySelectorAll("th").forEach((th) => {
         th.innerHTML = escapeHtml(opts.columns.find((c) => c.key === th.getAttribute("data-key")).label);
@@ -890,7 +978,7 @@
 
     loadMoreBtn.addEventListener("click", load);
 
-    return { reset, load, loadAll, loadStatic };
+    return { reset, load, loadAll, loadStatic, getItems: () => items.slice(), exportCsv, exportHtml };
   }
 
   const changesetsSection = createDataSection({
@@ -1075,6 +1163,27 @@
   setupCollapse("groupsSection", "groupsHeader");
   setupCollapse("briefcasesSection", "briefcasesHeader");
   setupCollapse("compareSection", "compareHeader");
+
+  function attachExportButtons(section, containerElId, filenamePrefix, title) {
+    const container = el(containerElId);
+    const csvBtn = document.createElement("button");
+    csvBtn.type = "button";
+    csvBtn.className = "secondary";
+    csvBtn.textContent = "Export CSV";
+    csvBtn.addEventListener("click", () => section.exportCsv(filenamePrefix));
+    const htmlBtn = document.createElement("button");
+    htmlBtn.type = "button";
+    htmlBtn.className = "secondary";
+    htmlBtn.textContent = "Export HTML";
+    htmlBtn.addEventListener("click", () => section.exportHtml(filenamePrefix, title));
+    container.appendChild(csvBtn);
+    container.appendChild(htmlBtn);
+  }
+
+  attachExportButtons(changesetsSection, "changesetsExport", "changesets", "Changesets");
+  attachExportButtons(groupsSection, "groupsExport", "changeset-groups", "Changeset Groups");
+  attachExportButtons(briefcasesSection, "briefcasesExport", "briefcases", "Briefcases");
+  attachExportButtons(compareSection, "compareExport", "changed-elements", "Changed Elements Comparison");
 
   // The API doesn't expose a total-count field or a $count parameter (checked
   // against the docs), so the exact total has to come from somewhere else per
@@ -1420,31 +1529,137 @@
     briefcasesSection.load();
   });
 
+  let lastIModelDetails = null;
+
+  function renderIModelDetailsBlock(im) {
+    const container = document.createElement("div");
+    renderKvDetails(container, im.displayName || im.id, [
+      ["ID", im.id],
+      ["Display name", im.displayName],
+      ["Name", im.name],
+      ["Description", im.description],
+      ["State", im.state],
+      ["iTwin ID", im.iTwinId],
+      ["Data center location", im.dataCenterLocation],
+      ["Created", fmtDate(im.createdDateTime)],
+      ["Last changeset push", fmtDate(im.lastChangesetPushDateTime)],
+      ["Secured", im.isSecured],
+      ["Containers enabled", im.containersEnabled]
+    ], im);
+    iModelMeta.innerHTML = "";
+    iModelMeta.appendChild(container);
+  }
+
   async function fetchIModelDetails(id) {
     try {
       const data = await apiGet(API_BASE + "/imodels/" + id);
       const im = data && data.iModel;
       if (!im) return;
-      const container = document.createElement("div");
-      renderKvDetails(container, im.displayName || im.id, [
-        ["ID", im.id],
-        ["Display name", im.displayName],
-        ["Name", im.name],
-        ["Description", im.description],
-        ["State", im.state],
-        ["iTwin ID", im.iTwinId],
-        ["Data center location", im.dataCenterLocation],
-        ["Created", fmtDate(im.createdDateTime)],
-        ["Last changeset push", fmtDate(im.lastChangesetPushDateTime)],
-        ["Secured", im.isSecured],
-        ["Containers enabled", im.containersEnabled]
-      ], im);
-      iModelMeta.innerHTML = "";
-      iModelMeta.appendChild(container);
+      lastIModelDetails = im;
+      renderIModelDetailsBlock(im);
     } catch (err) {
       // Non-fatal — the basic row from the list call is still shown.
     }
   }
+
+  // ---------------- Export / snapshot ----------------
+
+  // Builds a scrubbed clone of the live page for export: explicitly wipes the
+  // token textarea's content (rather than trusting cloneNode/outerHTML to not
+  // carry the live-typed value across) and unchecks "remember me", so nothing
+  // sensitive rides along in the exported file.
+  function buildScrubbedDocumentClone() {
+    const clone = document.documentElement.cloneNode(true);
+    const tokenClone = clone.querySelector("#tokenInput");
+    if (tokenClone) {
+      while (tokenClone.firstChild) tokenClone.removeChild(tokenClone.firstChild);
+      tokenClone.textContent = "";
+      tokenClone.removeAttribute("value");
+    }
+    const rememberClone = clone.querySelector("#rememberMe");
+    if (rememberClone) rememberClone.removeAttribute("checked");
+    return clone;
+  }
+
+  function buildExportBundle() {
+    return {
+      exportedAt: new Date().toISOString(),
+      iTwinId: currentITwinId,
+      iModel: lastIModelDetails || (currentIModelId ? iModelsById[currentIModelId] : null),
+      changesets: changesetsSection.getItems(),
+      groups: groupsSection.getItems(),
+      briefcases: briefcasesSection.getItems(),
+      compareResults: compareSection.getItems()
+    };
+  }
+
+  el("exportPageBtn").addEventListener("click", () => {
+    const bundle = buildExportBundle();
+    const clone = buildScrubbedDocumentClone();
+    const dataScript = clone.ownerDocument.createElement("script");
+    dataScript.type = "application/json";
+    dataScript.id = "imhb-embedded-data";
+    // Escape "<" so no amount of embedded data content can prematurely close
+    // this script tag or open a new one when the string is inlined as HTML.
+    dataScript.textContent = JSON.stringify(bundle).replace(/</g, "\\u003c");
+    // Insert into <head>, not the end of <body>: the main app script (a plain,
+    // non-deferred <script> in <body>) executes synchronously the moment the
+    // parser reaches it, and its restore check runs as part of that -- if the
+    // data tag were appended after it, the parser wouldn't have reached (or
+    // created) it yet and the lookup would always fail. <head> is always
+    // fully parsed before <body> starts, so this guarantees availability.
+    clone.querySelector("head").appendChild(dataScript);
+    const html = "<!DOCTYPE html>\n" + clone.outerHTML;
+    const namePart = bundle.iModel ? ("-" + (bundle.iModel.displayName || bundle.iModel.id)) : "";
+    downloadBlob(("imodel-history-browser" + namePart + "-" + todayStamp() + ".html").replace(/[^\w.\-]+/g, "_"), "text/html;charset=utf-8", html);
+  });
+
+  // ---------------- Restore from a previously-exported snapshot ----------------
+  // If this page was opened from a file produced by the export above, it carries
+  // its data baked in as a <script type="application/json"> tag (and no token).
+  // Re-seed every section from that instead of starting from an empty state.
+  (function restoreFromEmbeddedData() {
+    const dataEl = document.getElementById("imhb-embedded-data");
+    if (!dataEl) return;
+    let bundle;
+    try { bundle = JSON.parse(dataEl.textContent); } catch (e) { return; }
+    if (!bundle || !bundle.iModel) return;
+
+    const banner = el("snapshotBanner");
+    banner.innerHTML = "<strong>Static snapshot</strong> — exported " + escapeHtml(new Date(bundle.exportedAt).toLocaleString()) +
+      ". This data won't refresh. Paste your own access token above and pick an iModel to browse live data instead.";
+    banner.classList.remove("hidden");
+
+    if (bundle.iTwinId) projectIdInput.value = bundle.iTwinId;
+    currentITwinId = bundle.iTwinId || null;
+    currentIModelId = bundle.iModel.id;
+    lastIModelDetails = bundle.iModel;
+
+    iModelsById[bundle.iModel.id] = bundle.iModel;
+    clearSelect(iModelSelect, "-- select an iModel --");
+    const opt = document.createElement("option");
+    opt.value = bundle.iModel.id;
+    opt.textContent = bundle.iModel.displayName || bundle.iModel.id;
+    iModelSelect.appendChild(opt);
+    iModelSelect.value = bundle.iModel.id;
+    iModelSelectCard.classList.remove("hidden");
+    renderIModelDetailsBlock(bundle.iModel);
+
+    changesetsSection.reset(currentIModelId);
+    changesetsSection.loadStatic(bundle.changesets || []);
+    changesetsTotalCountEl.textContent = "";
+
+    groupsSection.reset(currentIModelId);
+    groupsSection.loadStatic(bundle.groups || []);
+
+    briefcasesSection.reset(currentIModelId);
+    briefcasesSection.loadStatic(bundle.briefcases || []);
+
+    compareSection.reset(currentIModelId);
+    if (bundle.compareResults && bundle.compareResults.length) {
+      compareSection.loadStatic(bundle.compareResults);
+    }
+  })();
 
 })();
 </script>
