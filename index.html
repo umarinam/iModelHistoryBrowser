@@ -693,6 +693,7 @@
   // resolved into a name, email and activity stats via fetchUser().
   function makeUserEnrichment(userIdKey, label) {
     return {
+      userIdKey,
       enrichRows: (newItems, iModelId, rerender) => {
         newItems.forEach((it) => {
           const uid = it[userIdKey];
@@ -907,24 +908,74 @@
       downloadBlob((filenamePrefix || "export") + "-" + todayStamp() + ".csv", "text/csv;charset=utf-8", lines.join("\r\n"));
     }
 
+    // Mirrors the on-screen table exactly (opts.columns, same as render()) and
+    // makes each row expand in place on click -- a detail row appears right
+    // below it with the same full field set as the app's details panel
+    // (collapsed Raw JSON) plus a resolved Creator/Owner sub-table when the
+    // section has one, using whatever _userDisplay/_userEmail is already
+    // cached on the item (this is a static file with no API access of its
+    // own). A little inline vanilla JS drives the expand/collapse -- no
+    // dependency on the rest of the app's script.
     function exportHtml(filenamePrefix, title) {
       const rows = getFiltered();
-      const labels = exportFieldLabels(rows);
       const heading = title || filenamePrefix || "Export";
+      const colCount = opts.columns.length + 1;
+
       let html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>" + escapeHtml(heading) + "</title>";
-      html += "<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#0f1115;color:#e6e9ef;padding:24px;}" +
+      html += "<style>" +
+        "body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#0f1115;color:#e6e9ef;padding:24px;}" +
         "table{border-collapse:collapse;width:100%;font-size:13px;}th,td{border:1px solid #2a2f3a;padding:6px 10px;text-align:left;white-space:nowrap;}" +
-        "th{background:#1c202a;}tr:nth-child(even){background:#171a21;}h1{font-size:18px;}p{color:#9aa3b2;font-size:12px;}</style>";
+        "th{background:#1c202a;}h1{font-size:18px;}p.meta{color:#9aa3b2;font-size:12px;}" +
+        "tr.export-row{cursor:pointer;}tr.export-row:hover td{background:#1c202a;}" +
+        "tr.export-row td.expand-toggle{color:#4da3ff;text-align:center;width:20px;}" +
+        "tr.export-detail-row td{background:#12151b;white-space:normal;}" +
+        "tr.export-detail-row.hidden{display:none;}" +
+        "h4.detail-heading{margin:14px 0 8px;font-size:12px;color:#9aa3b2;text-transform:uppercase;letter-spacing:.04em;}" +
+        "h4.detail-heading:first-child{margin-top:0;}" +
+        "table.kv{width:auto;min-width:320px;}table.kv td.k{color:#9aa3b2;width:160px;}" +
+        "pre.raw-json{background:#0f1115;border:1px solid #2a2f3a;border-radius:6px;padding:10px;font-size:12px;overflow-x:auto;max-height:340px;}" +
+        "</style>";
       html += "</head><body>";
       html += "<h1>" + escapeHtml(heading) + "</h1>";
-      html += "<p>Exported " + escapeHtml(new Date().toLocaleString()) + " — " + rows.length + " row" + (rows.length === 1 ? "" : "s") + "</p>";
-      html += "<table><thead><tr>" + labels.map((l) => "<th>" + escapeHtml(l) + "</th>").join("") + "</tr></thead><tbody>";
-      rows.forEach((it) => {
-        html += "<tr>" + opts.detailFields(it).map(([, v]) => {
+      html += "<p class='meta'>Exported " + escapeHtml(new Date().toLocaleString()) + " — " + rows.length + " row" + (rows.length === 1 ? "" : "s") + ". Click a row for details.</p>";
+      html += "<table><thead><tr>" + opts.columns.map((c) => "<th>" + escapeHtml(c.label) + "</th>").join("") + "<th></th></tr></thead><tbody>";
+
+      rows.forEach((it, idx) => {
+        const rowId = "row" + idx;
+        html += "<tr class='export-row' data-target='" + rowId + "'>" + opts.columns.map((c) => {
+          const v = c.format ? c.format(it) : it[c.key];
           return "<td>" + escapeHtml(v === undefined || v === null || v === "" ? "—" : v) + "</td>";
-        }).join("") + "</tr>";
+        }).join("") + "<td class='expand-toggle'>▸</td></tr>";
+
+        let detail = "";
+        if (opts.userIdKey && (it._userDisplay || it._userEmail || it[opts.userIdKey])) {
+          const userFields = [
+            ["Name", it._userDisplay],
+            ["Email", it._userEmail],
+            [(opts.enrichLabel || "Creator") + " ID", it[opts.userIdKey]]
+          ];
+          detail += "<h4 class='detail-heading'>" + escapeHtml(opts.enrichLabel || "Creator") + "</h4><table class='kv'><tbody>" +
+            userFields.map(([k, v]) => "<tr><td class='k'>" + escapeHtml(k) + "</td><td>" + escapeHtml(v === undefined || v === null || v === "" ? "—" : v) + "</td></tr>").join("") +
+            "</tbody></table>";
+        }
+        detail += "<h4 class='detail-heading'>Raw JSON</h4><details><summary>Show / hide</summary><pre class='raw-json'>" + escapeHtml(JSON.stringify(it, null, 2)) + "</pre></details>";
+
+        html += "<tr class='export-detail-row hidden' id='" + rowId + "'><td colspan='" + colCount + "'>" + detail + "</td></tr>";
       });
-      html += "</tbody></table></body></html>";
+
+      // Built as "<" + "script>" / "</" + "script>" throughout: this function's
+      // own source lives inside the app's real <script> tag, and the HTML
+      // parser looks for a literal "</script" to end a script block -- it
+      // doesn't understand JS string literals, so writing that sequence
+      // directly here would truncate the *outer* app script at parse time.
+      html += "<" + "script>document.querySelectorAll('.export-row').forEach(function(tr){" +
+        "tr.addEventListener('click',function(){" +
+        "var t=document.getElementById(tr.getAttribute('data-target'));" +
+        "var wasHidden=t.classList.contains('hidden');" +
+        "t.classList.toggle('hidden');" +
+        "tr.querySelector('.expand-toggle').textContent=wasHidden?'\\u25be':'\\u25b8';" +
+        "});});" + "<" + "/script>";
+      html += "</body></html>";
       downloadBlob((filenamePrefix || "export") + "-" + todayStamp() + ".html", "text/html;charset=utf-8", html);
     }
 
